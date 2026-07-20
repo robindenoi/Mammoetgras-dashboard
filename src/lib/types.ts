@@ -9,6 +9,7 @@ export interface Card {
   bewijs: string;
   afsluitvraag: string;
   script: string;
+  audio_url: string | null;
   created_at: string;
 }
 

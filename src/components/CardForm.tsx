@@ -20,6 +20,20 @@ export default function CardForm({ card, onSaved }: Props) {
   const [bewijs, setBewijs] = useState(card?.bewijs ?? "");
   const [afsluitvraag, setAfsluitvraag] = useState(card?.afsluitvraag ?? "");
   const [script, setScript] = useState(card?.script ?? "");
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(card?.audio_url ?? null);
+
+  async function uploadAudio(supabase: ReturnType<typeof createClient>, cardId: string): Promise<string | null> {
+    if (!audioFile) return audioUrl;
+    const ext = audioFile.name.split(".").pop();
+    const path = `${cardId}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("audio")
+      .upload(path, audioFile, { upsert: true });
+    if (upErr) throw new Error(`Upload mislukt: ${upErr.message}`);
+    const { data: urlData } = supabase.storage.from("audio").getPublicUrl(path);
+    return urlData.publicUrl;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,25 +41,40 @@ export default function CardForm({ card, onSaved }: Props) {
     setError(null);
 
     const supabase = createClient();
-    const data = { category, objection, erkennen, reframe, bewijs, afsluitvraag, script };
+    const data = { category, objection, erkennen, reframe, bewijs, afsluitvraag, script, audio_url: audioUrl };
 
-    if (card) {
-      const { data: updated, error: err } = await supabase
-        .from("cards")
-        .update(data)
-        .eq("id", card.id)
-        .select()
-        .single();
-      if (err) setError(err.message);
-      else onSaved(updated as Card);
-    } else {
-      const { data: created, error: err } = await supabase
-        .from("cards")
-        .insert(data)
-        .select()
-        .single();
-      if (err) setError(err.message);
-      else onSaved(created as Card);
+    try {
+      if (card) {
+        if (audioFile) {
+          data.audio_url = await uploadAudio(supabase, card.id);
+        }
+        const { data: updated, error: err } = await supabase
+          .from("cards")
+          .update(data)
+          .eq("id", card.id)
+          .select()
+          .single();
+        if (err) setError(err.message);
+        else onSaved(updated as Card);
+      } else {
+        const { data: created, error: err } = await supabase
+          .from("cards")
+          .insert(data)
+          .select()
+          .single();
+        if (err) {
+          setError(err.message);
+        } else if (created) {
+          if (audioFile) {
+            const url = await uploadAudio(supabase, created.id);
+            await supabase.from("cards").update({ audio_url: url }).eq("id", created.id);
+            (created as Card).audio_url = url;
+          }
+          onSaved(created as Card);
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Er ging iets mis");
     }
 
     setLoading(false);
@@ -165,6 +194,32 @@ export default function CardForm({ card, onSaved }: Props) {
             onChange={(e) => setScript(e.target.value)}
             placeholder="Het volledige voorbeeldgesprek..."
             className={fieldClass}
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+            Audiofragment (optioneel)
+          </label>
+          {audioUrl && !audioFile && (
+            <div className="mb-2 flex items-center gap-2">
+              <audio controls preload="metadata" className="h-10">
+                <source src={audioUrl} />
+              </audio>
+              <button
+                type="button"
+                onClick={() => setAudioUrl(null)}
+                className="text-sm text-red-500 hover:underline"
+              >
+                Verwijderen
+              </button>
+            </div>
+          )}
+          <input
+            type="file"
+            accept="audio/*"
+            onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+            className="w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-mg-green/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-mg-green hover:file:bg-mg-green/20"
           />
         </div>
       </div>

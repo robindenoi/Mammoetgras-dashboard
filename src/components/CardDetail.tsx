@@ -67,6 +67,17 @@ export default function CardDetail({ card, isAdmin, onEdit, onDelete }: Props) {
         ))}
       </div>
 
+      {card.audio_url && (
+        <div className="mt-8 rounded-xl bg-mg-dark/5 p-5">
+          <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-mg-green">
+            Beluister het script
+          </h4>
+          <audio controls className="w-full" preload="metadata">
+            <source src={card.audio_url} />
+          </audio>
+        </div>
+      )}
+
       <div className="mt-8 rounded-xl border-2 border-dashed border-mg-green/20 bg-mg-light p-5">
         <h4 className="mb-2 text-sm font-bold uppercase tracking-wider text-mg-green">
           Voorbeeldscript
