@@ -17,11 +17,25 @@ export default function CardGrid({ initialCards }: Props) {
   const { user } = useAuth();
   const [cards, setCards] = useState<Card[]>(initialCards);
   const [filter, setFilter] = useState<Category | null>(null);
+  const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Card | null>(null);
   const [editing, setEditing] = useState<Card | null>(null);
   const [showForm, setShowForm] = useState(false);
 
-  const filtered = filter ? cards.filter((c) => c.category === filter) : cards;
+  const filtered = cards.filter((c) => {
+    if (filter && c.category !== filter) return false;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      c.objection.toLowerCase().includes(q) ||
+      c.category.toLowerCase().includes(q) ||
+      c.erkennen.toLowerCase().includes(q) ||
+      c.reframe.toLowerCase().includes(q) ||
+      c.bewijs.toLowerCase().includes(q) ||
+      c.afsluitvraag.toLowerCase().includes(q) ||
+      c.script.toLowerCase().includes(q)
+    );
+  });
 
   async function handleDelete(id: string) {
     if (!confirm("Weet je zeker dat je deze kaart wilt verwijderen?")) return;
@@ -91,6 +105,28 @@ export default function CardGrid({ initialCards }: Props) {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+      <div className="relative mb-4">
+        <svg
+          className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+          />
+        </svg>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Zoek op bezwaar, trefwoord of script..."
+          className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-12 pr-4 text-gray-800 placeholder:text-gray-400 focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
+        />
+      </div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <CategoryFilter active={filter} onChange={setFilter} />
         {user && (
