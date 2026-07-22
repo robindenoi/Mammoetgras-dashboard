@@ -39,6 +39,18 @@ export function formatTime(iso: string): string {
   return format(new TZDate(new Date(iso).getTime(), TZ), "HH:mm");
 }
 
+// Minuten sinds middernacht (Amsterdamse tijd) — voor plaatsing in het rooster.
+export function minutesIntoDay(iso: string): number {
+  const d = new TZDate(new Date(iso).getTime(), TZ);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+export function durationMinutes(startIso: string, endIso: string): number {
+  return Math.round(
+    (new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000
+  );
+}
+
 export function formatDate(iso: string): string {
   return format(new TZDate(new Date(iso).getTime(), TZ), "d MMM yyyy", {
     locale: nl,

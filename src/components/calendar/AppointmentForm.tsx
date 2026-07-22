@@ -11,6 +11,7 @@ interface Props {
   defaultOwnerId: string;
   currentUserId: string;
   defaultDate?: string; // yyyy-MM-dd
+  defaultStart?: string; // yyyy-MM-ddTHH:mm (heeft voorrang op defaultDate)
   onSaved: (appt: Appointment) => void;
   onDeleted: (id: string) => void;
   onClose: () => void;
@@ -32,6 +33,7 @@ export default function AppointmentForm({
   defaultOwnerId,
   currentUserId,
   defaultDate,
+  defaultStart,
   onSaved,
   onDeleted,
   onClose,
@@ -45,7 +47,7 @@ export default function AppointmentForm({
   const [start, setStart] = useState(
     appointment
       ? isoToAmsterdamLocal(appointment.starts_at)
-      : `${defaultDate ?? ""}T10:00`
+      : (defaultStart ?? `${defaultDate ?? ""}T10:00`)
   );
   const [duration, setDuration] = useState(initialDuration(appointment));
 
