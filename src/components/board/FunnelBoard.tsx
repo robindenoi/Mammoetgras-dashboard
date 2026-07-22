@@ -203,6 +203,15 @@ export default function FunnelBoard({
       .update({ closer_id: closerId, funnel: "closing", stage: CLOSING_STAGES[0] })
       .eq("id", id);
     if (err) return setError(err.message);
+    // Openstaande afspraken verhuizen mee naar de closer (DB-trigger doet dit ook;
+    // hier spiegelen we het lokaal zodat de agenda direct klopt).
+    setAppts((prev) =>
+      prev.map((a) =>
+        a.lead_id === id && a.starts_at >= nowISO
+          ? { ...a, owner_id: closerId }
+          : a
+      )
+    );
     setLeads((ls) => ls.filter((l) => l.id !== id));
     setHandoffLead(null);
     setSelectedId(null);

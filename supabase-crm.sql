@@ -238,3 +238,20 @@ drop policy if exists "appointments delete" on public.appointments;
 create policy "appointments delete"
   on public.appointments for delete to authenticated
   using (owner_id = auth.uid() or public.is_admin());
+
+-- Bij handoff: openstaande afspraken van de lead verhuizen naar de nieuwe closer
+-- (created_by blijft de oorspronkelijke agent — herkomst blijft bewaard).
+create or replace function public.reassign_appts_on_handoff()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if new.closer_id is distinct from old.closer_id and new.closer_id is not null then
+    update public.appointments
+      set owner_id = new.closer_id
+      where lead_id = new.id and starts_at >= now();
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists trg_reassign_appts on public.leads;
+create trigger trg_reassign_appts after update on public.leads
+  for each row execute function public.reassign_appts_on_handoff();

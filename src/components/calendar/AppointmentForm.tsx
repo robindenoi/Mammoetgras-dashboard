@@ -137,9 +137,17 @@ export default function AppointmentForm({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
       <div className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-xl sm:rounded-3xl">
-        <h2 className="mb-4 text-lg font-bold text-mg-dark">
+        <h2 className="mb-1 text-lg font-bold text-mg-dark">
           {appointment ? "Afspraak bewerken" : "Nieuwe afspraak"}
         </h2>
+        {appointment?.created_by &&
+          appointment.created_by !== appointment.owner_id && (
+            <p className="mb-3 text-xs text-gray-400">
+              Oorspronkelijk ingepland door{" "}
+              {people.find((p) => p.id === appointment.created_by)?.full_name ||
+                "een agent"}
+            </p>
+          )}
 
         {error && (
           <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
