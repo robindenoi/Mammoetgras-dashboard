@@ -5,7 +5,24 @@
 -- ============================================================
 
 -- ------------------------------------------------------------
--- 1. ROLE-HELPER (security definer → omzeilt RLS, voorkomt recursie)
+-- 1. PROFILES (eerst de tabel, daarna pas de functies die ernaar verwijzen)
+-- ------------------------------------------------------------
+do $$ begin
+  create type public.user_role as enum ('agent','closer','admin');
+exception when duplicate_object then null; end $$;
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  leaddesk_name text,          -- naam zoals in LeadDesk-CSV (voor matching)
+  role public.user_role not null default 'agent',
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table public.profiles enable row level security;
+
+-- ------------------------------------------------------------
+-- 2. ROLE-HELPER (security definer → omzeilt RLS, voorkomt recursie)
 -- ------------------------------------------------------------
 create or replace function public.current_role_is(target text)
 returns boolean
@@ -31,22 +48,8 @@ as $$
 $$;
 
 -- ------------------------------------------------------------
--- 2. PROFILES
+-- 3. PROFILES — policies & triggers
 -- ------------------------------------------------------------
-do $$ begin
-  create type public.user_role as enum ('agent','closer','admin');
-exception when duplicate_object then null; end $$;
-
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text,
-  leaddesk_name text,          -- naam zoals in LeadDesk-CSV (voor matching)
-  role public.user_role not null default 'agent',
-  active boolean not null default true,
-  created_at timestamptz not null default now()
-);
-alter table public.profiles enable row level security;
-
 drop policy if exists "profielen leesbaar voor ingelogden" on public.profiles;
 create policy "profielen leesbaar voor ingelogden"
   on public.profiles for select to authenticated using (true);
@@ -70,7 +73,9 @@ security definer
 set search_path = ''
 as $$
 begin
-  if not public.is_admin() then
+  -- auth.uid() is null in de SQL-editor / service-context (geen API-call):
+  -- daar mag alles, want alleen beheerders/superusers komen daar.
+  if auth.uid() is not null and not public.is_admin() then
     if new.role is distinct from old.role
        or new.active is distinct from old.active
        or new.id is distinct from old.id then
@@ -113,7 +118,7 @@ where not exists (select 1 from public.profiles p where p.id = u.id);
 --   where id = (select id from auth.users where email='robin@tictaps.com');
 
 -- ------------------------------------------------------------
--- 3. LEADS
+-- 4. LEADS
 -- ------------------------------------------------------------
 create table if not exists public.leads (
   id uuid primary key default gen_random_uuid(),
@@ -127,6 +132,8 @@ create table if not exists public.leads (
   closer_id uuid references public.profiles(id) on delete set null,
   funnel text not null default 'agent' check (funnel in ('agent','closing')),
   stage text not null,
+  priority text not null default 'midden' check (priority in ('hoog','midden','laag')),
+  position double precision not null default 0,
   voicemail_count int not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -170,7 +177,7 @@ create trigger trg_leads_touch before update on public.leads
   for each row execute function public.touch_updated_at();
 
 -- ------------------------------------------------------------
--- 4. LEAD COMMENTS
+-- 5. LEAD COMMENTS
 -- ------------------------------------------------------------
 create table if not exists public.lead_comments (
   id uuid primary key default gen_random_uuid(),
@@ -194,7 +201,7 @@ create policy "comments insert (eigen auteur)"
               and exists (select 1 from public.leads l where l.id = lead_id));
 
 -- ------------------------------------------------------------
--- 5. APPOINTMENTS
+-- 6. APPOINTMENTS
 -- ------------------------------------------------------------
 create table if not exists public.appointments (
   id uuid primary key default gen_random_uuid(),

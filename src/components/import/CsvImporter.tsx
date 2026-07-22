@@ -7,7 +7,7 @@ import type { Profile } from "@/lib/types";
 import {
   type ColumnMapping,
   type CsvRow,
-  type LeadField,
+  type MapTarget,
   rowToLead,
   toLeadInsert,
   normalizeName,
@@ -19,14 +19,25 @@ interface Props {
   profiles: Profile[];
 }
 
-function guessField(header: string): LeadField | "extra" {
+function guessField(header: string): MapTarget {
   const h = header.toLowerCase();
   if (/(agent|verkoper|medewerker|rep)/.test(h)) return "agent";
-  if (/(voornaam|achternaam|naam|name)/.test(h)) return "full_name";
-  if (/(adres|address|straat|postcode|plaats|woonplaats)/.test(h)) return "address";
+  if (/(cliënt|client|contactpersoon)/.test(h)) return "contactpersoon";
+  if (/(contactlijst|lijst)/.test(h)) return "contactlijst";
+  if (/(bedrijfsnaam|voornaam|achternaam|naam|name)/.test(h)) return "full_name";
+  if (/(postcode|zip)/.test(h)) return "postcode";
+  if (/(stad|plaats|woonplaats|gemeente)/.test(h)) return "stad";
+  if (/(adres|address|straat)/.test(h)) return "address";
   if (/(tel|phone|mobiel|gsm|nummer)/.test(h)) return "phone";
   if (/(mail|e-mail|email)/.test(h)) return "email";
   if (/(^id$|lead.?id|ref|extern)/.test(h)) return "external_ref";
+  if (/(campagne|campaign)/.test(h)) return "campagne";
+  if (/(gespreksresultaat|resultaat|status)/.test(h)) return "gespreksresultaat";
+  if (/(discussiemoment|venster|belafspraak|belvenster)/.test(h))
+    return "terugbelvenster";
+  if (/(commentaar|opmerking|notitie|comment)/.test(h)) return "commentaar";
+  if (/(datum|date)/.test(h)) return "datum";
+  if (/(tijd|time)/.test(h)) return "tijd";
   return "extra";
 }
 
@@ -123,7 +134,7 @@ export default function CsvImporter({ profiles }: Props) {
     });
   }
 
-  function setColumn(col: string, value: LeadField | "extra") {
+  function setColumn(col: string, value: MapTarget) {
     setMapping((prev) => ({ ...prev, [col]: value }));
   }
 

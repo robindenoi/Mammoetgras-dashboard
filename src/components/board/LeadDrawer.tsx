@@ -2,8 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Lead, LeadComment, Profile } from "@/lib/types";
+import type {
+  Lead,
+  LeadComment,
+  Profile,
+  Appointment,
+  Priority,
+} from "@/lib/types";
+import { PRIORITIES, PRIORITY_LABELS, PRIORITY_COLORS } from "@/lib/types";
 import { isFinalAgentStage } from "@/lib/funnels";
+import { EXTRA_FIELDS } from "@/lib/csv";
+import { formatDateTime, isoToAmsterdamLocal, amsterdamLocalToISO } from "@/lib/time";
 import StagePicker from "./StagePicker";
 
 interface Props {
@@ -12,8 +21,12 @@ interface Props {
   funnel: "agent" | "closing";
   currentUserId: string;
   profilesById: Record<string, Profile>;
+  leadAppts: Appointment[];
   onMove: (stage: string) => void;
+  onPriority: (p: Priority) => void;
   onVoicemail: (value: number) => void;
+  onSaveAppt: (startsISO: string, endsISO: string, id?: string) => Promise<void>;
+  onDeleteAppt: (id: string) => Promise<void>;
   onHandoff: () => void;
   onClose: () => void;
 }
@@ -24,8 +37,12 @@ export default function LeadDrawer({
   funnel,
   currentUserId,
   profilesById,
+  leadAppts,
   onMove,
+  onPriority,
   onVoicemail,
+  onSaveAppt,
+  onDeleteAppt,
   onHandoff,
   onClose,
 }: Props) {
@@ -33,6 +50,26 @@ export default function LeadDrawer({
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
+
+  // Opvolgafspraak-formulier
+  const [apptStart, setApptStart] = useState("");
+  const [apptDuration, setApptDuration] = useState(30);
+  const [editingApptId, setEditingApptId] = useState<string | null>(null);
+  const [savingAppt, setSavingAppt] = useState(false);
+
+  async function submitAppt() {
+    if (!apptStart.includes("T") || apptStart.startsWith("T")) return;
+    setSavingAppt(true);
+    const startsISO = amsterdamLocalToISO(apptStart);
+    const endsISO = new Date(
+      new Date(startsISO).getTime() + apptDuration * 60000
+    ).toISOString();
+    await onSaveAppt(startsISO, endsISO, editingApptId ?? undefined);
+    setApptStart("");
+    setApptDuration(30);
+    setEditingApptId(null);
+    setSavingAppt(false);
+  }
 
   useEffect(() => {
     const supabase = createClient();
@@ -64,6 +101,12 @@ export default function LeadDrawer({
   }
 
   const showHandoff = funnel === "agent" && isFinalAgentStage(lead.stage);
+
+  const knownKeys = new Set<string>(EXTRA_FIELDS.map((f) => f.key));
+  const knownExtra = EXTRA_FIELDS.filter((f) => lead.extra[f.key]);
+  const unknownExtra = Object.entries(lead.extra).filter(
+    ([k]) => !knownKeys.has(k)
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
@@ -112,6 +155,109 @@ export default function LeadDrawer({
 
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Prioriteit
+            </label>
+            <div className="flex gap-2">
+              {PRIORITIES.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => onPriority(p)}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                    lead.priority === p
+                      ? PRIORITY_COLORS[p] + " ring-2 ring-offset-1 ring-current"
+                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  }`}
+                >
+                  {PRIORITY_LABELS[p]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Opvolgafspraken
+            </label>
+            {leadAppts.length > 0 && (
+              <ul className="mb-3 space-y-2">
+                {leadAppts
+                  .slice()
+                  .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+                  .map((a) => (
+                    <li
+                      key={a.id}
+                      className="flex items-center justify-between rounded-lg bg-mg-green/10 px-3 py-2 text-sm"
+                    >
+                      <span className="font-medium text-mg-dark">
+                        {formatDateTime(a.starts_at)}
+                      </span>
+                      <span className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingApptId(a.id);
+                            setApptStart(isoToAmsterdamLocal(a.starts_at));
+                          }}
+                          className="text-xs font-medium text-mg-green hover:underline"
+                        >
+                          bewerk
+                        </button>
+                        <button
+                          onClick={() => onDeleteAppt(a.id)}
+                          className="text-xs font-medium text-red-500 hover:underline"
+                        >
+                          verwijder
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+            <div className="flex flex-wrap items-end gap-2">
+              <input
+                type="datetime-local"
+                value={apptStart}
+                onChange={(e) => setApptStart(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
+              />
+              <select
+                value={apptDuration}
+                onChange={(e) => setApptDuration(Number(e.target.value))}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
+              >
+                {[15, 30, 45, 60].map((d) => (
+                  <option key={d} value={d}>
+                    {d} min
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={submitAppt}
+                disabled={savingAppt || !apptStart}
+                className="rounded-lg bg-mg-green px-4 py-2 text-sm font-semibold text-white hover:bg-mg-accent disabled:opacity-50"
+              >
+                {editingApptId ? "Bijwerken" : "Inplannen"}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">
+              Verschijnt ook in de agenda.
+            </p>
+          </div>
+
+          {knownExtra.length > 0 && (
+            <dl className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-xl bg-mg-light p-4 text-sm sm:grid-cols-2">
+              {knownExtra.map((f) => (
+                <div key={f.key}>
+                  <dt className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    {f.label}
+                  </dt>
+                  <dd className="text-gray-800">{lead.extra[f.key]}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
               Stage
             </label>
             <StagePicker stages={stages} value={lead.stage} onChange={onMove} />
@@ -149,13 +295,13 @@ export default function LeadDrawer({
             </button>
           )}
 
-          {Object.keys(lead.extra).length > 0 && (
-            <details className="rounded-xl bg-mg-light p-4">
+          {unknownExtra.length > 0 && (
+            <details className="rounded-xl bg-gray-50 p-4">
               <summary className="cursor-pointer text-sm font-semibold text-gray-600">
-                Extra info uit CSV
+                Overige velden uit CSV
               </summary>
               <dl className="mt-2 space-y-1 text-sm">
-                {Object.entries(lead.extra).map(([k, v]) => (
+                {unknownExtra.map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4">
                     <dt className="text-gray-500">{k}</dt>
                     <dd className="text-right text-gray-800">{v}</dd>

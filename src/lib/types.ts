@@ -34,6 +34,24 @@ export const CATEGORY_COLORS: Record<Category, string> = {
 export type Role = "agent" | "closer" | "admin";
 export type Funnel = "agent" | "closing";
 export type AppointmentType = "terugbel" | "closing";
+export type Priority = "hoog" | "midden" | "laag";
+
+export const PRIORITIES: Priority[] = ["hoog", "midden", "laag"];
+export const PRIORITY_LABELS: Record<Priority, string> = {
+  hoog: "Hoog",
+  midden: "Midden",
+  laag: "Laag",
+};
+export const PRIORITY_COLORS: Record<Priority, string> = {
+  hoog: "bg-red-100 text-red-700",
+  midden: "bg-amber-100 text-amber-700",
+  laag: "bg-gray-100 text-gray-600",
+};
+export const PRIORITY_RANK: Record<Priority, number> = {
+  hoog: 0,
+  midden: 1,
+  laag: 2,
+};
 
 export interface Profile {
   id: string;
@@ -56,6 +74,8 @@ export interface Lead {
   closer_id: string | null;
   funnel: Funnel;
   stage: string;
+  priority: Priority;
+  position: number;
   voicemail_count: number;
   created_at: string;
   updated_at: string;

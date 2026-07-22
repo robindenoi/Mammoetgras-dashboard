@@ -5,14 +5,14 @@ import { format, addDays } from "date-fns";
 import { nl } from "date-fns/locale";
 import type { Appointment, Profile } from "@/lib/types";
 import { weekDays, sameAmsterdamDay, formatTime } from "@/lib/time";
-import PersonFilter from "./PersonFilter";
 import AppointmentForm from "./AppointmentForm";
 
 interface Props {
-  initialAppointments: Appointment[];
+  appointments: Appointment[];
+  setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
   people: Profile[];
   currentUserId: string;
-  defaultOwner: string;
+  filterOwner: string; // "all" | profile-id
 }
 
 type FormState =
@@ -21,19 +21,18 @@ type FormState =
   | null;
 
 export default function AgendaView({
-  initialAppointments,
+  appointments,
+  setAppointments,
   people,
   currentUserId,
-  defaultOwner,
+  filterOwner,
 }: Props) {
-  const [appts, setAppts] = useState<Appointment[]>(initialAppointments);
   const [weekRef, setWeekRef] = useState<Date>(new Date());
-  const [filter, setFilter] = useState<string>(defaultOwner);
   const [form, setForm] = useState<FormState>(null);
 
   const days = weekDays(weekRef);
-  const visible = appts.filter(
-    (a) => filter === "all" || a.owner_id === filter
+  const visible = appointments.filter(
+    (a) => filterOwner === "all" || a.owner_id === filterOwner
   );
 
   const weekLabel = `${format(days[0], "d MMM", { locale: nl })} – ${format(
@@ -43,7 +42,7 @@ export default function AgendaView({
   )}`;
 
   function upsert(appt: Appointment) {
-    setAppts((prev) => {
+    setAppointments((prev) => {
       const idx = prev.findIndex((a) => a.id === appt.id);
       if (idx >= 0) {
         const next = [...prev];
@@ -79,17 +78,14 @@ export default function AgendaView({
           </button>
         </div>
         <span className="text-sm font-semibold text-mg-dark">{weekLabel}</span>
-        <div className="ml-auto flex items-center gap-2">
-          <PersonFilter people={people} value={filter} onChange={setFilter} />
-          <button
-            onClick={() =>
-              setForm({ mode: "new", date: format(new Date(), "yyyy-MM-dd") })
-            }
-            className="rounded-xl bg-mg-green px-4 py-2 text-sm font-semibold text-white hover:bg-mg-accent"
-          >
-            + Afspraak
-          </button>
-        </div>
+        <button
+          onClick={() =>
+            setForm({ mode: "new", date: format(new Date(), "yyyy-MM-dd") })
+          }
+          className="ml-auto rounded-xl bg-mg-green px-4 py-2 text-sm font-semibold text-white hover:bg-mg-accent"
+        >
+          + Afspraak
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-7">
@@ -137,7 +133,7 @@ export default function AgendaView({
                         {formatTime(a.starts_at)}
                       </span>{" "}
                       {a.title || (a.type === "closing" ? "Closing" : "Terugbel")}
-                      {filter === "all" && owner && (
+                      {filterOwner === "all" && owner && (
                         <span className="block text-[10px] text-gray-500">
                           {owner.full_name}
                         </span>
@@ -155,14 +151,12 @@ export default function AgendaView({
         <AppointmentForm
           appointment={form.mode === "edit" ? form.appt : null}
           people={people}
-          defaultOwnerId={
-            filter !== "all" ? filter : currentUserId
-          }
+          defaultOwnerId={filterOwner !== "all" ? filterOwner : currentUserId}
           currentUserId={currentUserId}
           defaultDate={form.mode === "new" ? form.date : undefined}
           onSaved={upsert}
           onDeleted={(id) => {
-            setAppts((prev) => prev.filter((a) => a.id !== id));
+            setAppointments((prev) => prev.filter((a) => a.id !== id));
             setForm(null);
           }}
           onClose={() => setForm(null)}

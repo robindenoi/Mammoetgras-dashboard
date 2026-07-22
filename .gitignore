@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Lokale test-CSV's (bevatten persoonsgegevens) — niet committen
+*.csv

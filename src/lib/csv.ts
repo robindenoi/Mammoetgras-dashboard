@@ -1,30 +1,56 @@
 import { AGENT_STAGES } from "./funnels";
 
-// Velden waar een CSV-kolom aan gekoppeld kan worden.
-export const LEAD_FIELDS = [
+// Kernvelden met een echte kolom in de leads-tabel (speciaal gedrag).
+export const CORE_FIELDS = [
   "full_name",
-  "address",
   "phone",
   "email",
+  "address",
   "external_ref",
   "agent",
 ] as const;
+export type CoreField = (typeof CORE_FIELDS)[number];
 
-export type LeadField = (typeof LEAD_FIELDS)[number];
+// Extra velden: 1-op-1 te koppelen, opgeslagen in de `extra`-jsonb en
+// getoond bij de lead. Volgorde bepaalt de weergave in het lead-scherm.
+export const EXTRA_FIELDS = [
+  { key: "contactpersoon", label: "Contactpersoon" },
+  { key: "gespreksresultaat", label: "Gespreksresultaat" },
+  { key: "commentaar", label: "Commentaar" },
+  { key: "terugbelvenster", label: "Terugbel-venster" },
+  { key: "postcode", label: "Postcode" },
+  { key: "stad", label: "Stad" },
+  { key: "campagne", label: "Campagne" },
+  { key: "contactlijst", label: "Contactlijst" },
+  { key: "datum", label: "Datum" },
+  { key: "tijd", label: "Tijd" },
+] as const;
+export type ExtraKey = (typeof EXTRA_FIELDS)[number]["key"];
 
-export const FIELD_LABELS: Record<LeadField | "extra", string> = {
-  full_name: "Naam",
-  address: "Adres",
+export type MapTarget = CoreField | ExtraKey | "extra";
+
+export const FIELD_LABELS: Record<string, string> = {
+  full_name: "Naam / bedrijf",
   phone: "Telefoon",
   email: "E-mail",
+  address: "Adres",
   external_ref: "LeadDesk-ID (voor dedupe)",
   agent: "Sales agent (wie brochure stuurde)",
-  extra: "Houd als extra",
+  extra: "Overig / negeren",
+  ...Object.fromEntries(EXTRA_FIELDS.map((f) => [f.key, f.label])),
 };
 
-// mapping: CSV-kolomnaam -> veld of "extra"
-export type ColumnMapping = Record<string, LeadField | "extra">;
+// Volgorde waarin velden in de dropdown verschijnen.
+export const MAP_OPTIONS: MapTarget[] = [
+  ...CORE_FIELDS,
+  ...EXTRA_FIELDS.map((f) => f.key),
+  "extra",
+];
 
+const EXTRA_KEYS = new Set<string>(EXTRA_FIELDS.map((f) => f.key));
+
+// mapping: CSV-kolomnaam -> doelveld
+export type ColumnMapping = Record<string, MapTarget>;
 export type CsvRow = Record<string, string>;
 
 export interface MappedLead {
@@ -56,23 +82,26 @@ export function rowToLead(row: CsvRow, mapping: ColumnMapping): MappedLead {
   };
 
   for (const [col, value] of Object.entries(row)) {
-    const target = mapping[col] ?? "extra";
+    const target: MapTarget = mapping[col] ?? "extra";
     const cleaned = clean(value);
-    switch (target) {
-      case "agent":
-        lead.agentName = cleaned;
-        break;
-      case "phone":
-        lead.phone = cleaned ? cleaned.replace(/\s+/g, "") : null;
-        break;
-      case "external_ref":
-        lead.external_ref = cleaned;
-        break;
-      case "extra":
-        if (cleaned !== null) lead.extra[col] = cleaned;
-        break;
-      default:
-        lead[target] = cleaned;
+
+    if (target === "agent") {
+      lead.agentName = cleaned;
+    } else if (target === "phone") {
+      lead.phone = cleaned ? cleaned.replace(/\s+/g, "") : null;
+    } else if (target === "external_ref") {
+      lead.external_ref = cleaned;
+    } else if (target === "full_name") {
+      lead.full_name = cleaned;
+    } else if (target === "address") {
+      lead.address = cleaned;
+    } else if (target === "email") {
+      lead.email = cleaned;
+    } else if (EXTRA_KEYS.has(target)) {
+      if (cleaned !== null) lead.extra[target] = cleaned;
+    } else {
+      // "extra" catch-all: bewaar onder de originele kolomnaam.
+      if (cleaned !== null) lead.extra[col] = cleaned;
     }
   }
   return lead;

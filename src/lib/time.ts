@@ -1,5 +1,6 @@
 import { TZDate } from "@date-fns/tz";
 import { format, startOfWeek, addDays, startOfDay, isSameDay } from "date-fns";
+import { nl } from "date-fns/locale";
 
 export const TZ = "Europe/Amsterdam";
 
@@ -36,6 +37,18 @@ export function isoToAmsterdamLocal(iso: string): string {
 
 export function formatTime(iso: string): string {
   return format(new TZDate(new Date(iso).getTime(), TZ), "HH:mm");
+}
+
+export function formatDate(iso: string): string {
+  return format(new TZDate(new Date(iso).getTime(), TZ), "d MMM yyyy", {
+    locale: nl,
+  });
+}
+
+export function formatDateTime(iso: string): string {
+  return format(new TZDate(new Date(iso).getTime(), TZ), "EEE d MMM HH:mm", {
+    locale: nl,
+  });
 }
 
 export function formatDayLabel(iso: string | Date): string {
