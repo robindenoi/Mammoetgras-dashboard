@@ -17,27 +17,39 @@ export default function LoginPage() {
     setError(null);
 
     const supabase = createClient();
-    const { error: err } = await supabase.auth.signInWithPassword({
+    const { data, error: err } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (err) {
+    if (err || !data.user) {
       setError("Ongeldige inloggegevens. Probeer het opnieuw.");
       setLoading(false);
-    } else {
-      router.push("/");
-      router.refresh();
+      return;
     }
+
+    const next = new URLSearchParams(window.location.search).get("next");
+    let dest = next;
+    if (!dest) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+      dest = profile?.role === "closer" ? "/closing" : "/leads";
+    }
+
+    router.push(dest);
+    router.refresh();
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-mg-light px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-mg-dark">Admin Login</h1>
+          <h1 className="text-2xl font-bold text-mg-dark">Inloggen</h1>
           <p className="mt-2 text-sm text-gray-500">
-            Alleen voor Joey en Quincy.
+            Log in met je Mammoetgras-account.
           </p>
         </div>
 

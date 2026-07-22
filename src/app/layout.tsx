@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/components/AuthProvider";
+import Header from "@/components/Header";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -8,9 +10,8 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Mammoetgras — Bezwaarkaarten",
-  description:
-    "Sales objection-handling dashboard voor Mammoetgras Wereldwijd",
+  title: "Mammoetgras",
+  description: "Sales-dashboard voor Mammoetgras Wereldwijd",
 };
 
 export default function RootLayout({
@@ -21,7 +22,10 @@ export default function RootLayout({
   return (
     <html lang="nl" className={`${manrope.variable} h-full`}>
       <body className="min-h-full flex flex-col bg-mg-light font-sans text-gray-900 antialiased">
-        {children}
+        <AuthProvider>
+          <Header />
+          <div className="flex flex-1 flex-col">{children}</div>
+        </AuthProvider>
       </body>
     </html>
   );
