@@ -7,6 +7,7 @@ import { formatDate, formatDateTime } from "@/lib/time";
 interface Props {
   lead: Lead;
   nextAppt: Appointment | null;
+  ownerName?: string | null;
   draggable?: boolean;
   dragging?: boolean;
   onDragStart?: () => void;
@@ -17,6 +18,7 @@ interface Props {
 export default function LeadCard({
   lead,
   nextAppt,
+  ownerName,
   draggable,
   dragging,
   onDragStart,
@@ -65,9 +67,19 @@ export default function LeadCard({
         </span>
       )}
 
-      <span className="mt-1 text-xs text-gray-400">
-        Aangemaakt {formatDate(lead.created_at)}
-      </span>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span className="text-xs text-gray-400">
+          Aangemaakt {formatDate(lead.created_at)}
+        </span>
+        {ownerName && (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-mg-green/15 text-[10px] font-bold text-mg-green">
+              {ownerName.charAt(0).toUpperCase()}
+            </span>
+            {ownerName}
+          </span>
+        )}
+      </div>
     </button>
   );
 }

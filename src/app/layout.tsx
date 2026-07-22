@@ -3,6 +3,7 @@ import { Manrope } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import Header from "@/components/Header";
+import ReminderWatcher from "@/components/ReminderWatcher";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -24,6 +25,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-mg-light font-sans text-gray-900 antialiased">
         <AuthProvider>
           <Header />
+          <ReminderWatcher />
           <div className="flex flex-1 flex-col">{children}</div>
         </AuthProvider>
       </body>

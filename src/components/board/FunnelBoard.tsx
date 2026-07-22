@@ -305,6 +305,11 @@ export default function FunnelBoard({
                         <LeadCard
                           lead={lead}
                           nextAppt={nextApptByLead[lead.id] ?? null}
+                          ownerName={
+                            lead.agent_id
+                              ? profilesById[lead.agent_id]?.full_name
+                              : null
+                          }
                           dragging={dragId === lead.id}
                           draggable
                           onDragStart={() => setDragId(lead.id)}

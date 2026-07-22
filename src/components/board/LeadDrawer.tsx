@@ -119,6 +119,18 @@ export default function LeadDrawer({
             {lead.address && (
               <p className="text-sm text-gray-500">{lead.address}</p>
             )}
+            <p className="mt-1 text-xs text-gray-400">
+              Agent:{" "}
+              {lead.agent_id
+                ? profilesById[lead.agent_id]?.full_name || "onbekend"
+                : "niet toegewezen"}
+              {lead.closer_id && (
+                <>
+                  {" · Closer: "}
+                  {profilesById[lead.closer_id]?.full_name || "onbekend"}
+                </>
+              )}
+            </p>
           </div>
           <button
             onClick={onClose}
