@@ -9,13 +9,18 @@ export default async function LeadsPage() {
   const profile = await requireRole("agent", "admin");
   const supabase = await createClient();
 
-  const [{ data: leads }, { data: profiles }, { data: appts }] =
+  const [{ data: leads }, { data: handedOff }, { data: profiles }, { data: appts }] =
     await Promise.all([
       supabase
         .from("leads")
         .select("*")
         .eq("funnel", "agent")
         .order("updated_at", { ascending: false }),
+      supabase
+        .from("leads")
+        .select("id, closer_id")
+        .eq("agent_id", profile.id)
+        .eq("funnel", "closing"),
       supabase.from("profiles").select("*"),
       supabase.from("appointments").select("*"),
     ]);
@@ -23,6 +28,11 @@ export default async function LeadsPage() {
   const all = (profiles as Profile[]) ?? [];
   const profilesById = Object.fromEntries(all.map((p) => [p.id, p]));
   const closers = all.filter((p) => p.role === "closer" && p.active);
+
+  const handedOffMap: Record<string, string> = {};
+  for (const h of (handedOff ?? []) as { id: string; closer_id: string | null }[]) {
+    if (h.closer_id) handedOffMap[h.id] = h.closer_id;
+  }
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
@@ -40,6 +50,8 @@ export default async function LeadsPage() {
         profilesById={profilesById}
         people={all.filter((p) => p.active)}
         currentUserId={profile.id}
+        currentUserRole={profile.role}
+        handedOffLeadCloser={handedOffMap}
       />
     </main>
   );

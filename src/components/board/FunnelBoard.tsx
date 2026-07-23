@@ -194,7 +194,7 @@ export default function FunnelBoard({
     setAppts((prev) => prev.filter((a) => a.id !== id));
   }
 
-  async function handoff(closerId: string) {
+  async function handoff(closerId: string, appt?: { starts_at: string; ends_at: string }) {
     if (!handoffLead) return;
     const id = handoffLead.id;
     const supabase = createClient();
@@ -203,8 +203,25 @@ export default function FunnelBoard({
       .update({ closer_id: closerId, funnel: "closing", stage: CLOSING_STAGES[0] })
       .eq("id", id);
     if (err) return setError(err.message);
-    // Openstaande afspraken verhuizen mee naar de closer (DB-trigger doet dit ook;
-    // hier spiegelen we het lokaal zodat de agenda direct klopt).
+
+    if (appt) {
+      const { data, error: apptErr } = await supabase
+        .from("appointments")
+        .insert({
+          lead_id: id,
+          owner_id: closerId,
+          created_by: currentUserId,
+          type: "closing",
+          title: handoffLead.full_name ?? null,
+          starts_at: appt.starts_at,
+          ends_at: appt.ends_at,
+        })
+        .select()
+        .single();
+      if (apptErr) setError(apptErr.message);
+      else setAppts((prev) => [...prev, data as Appointment]);
+    }
+
     setAppts((prev) =>
       prev.map((a) =>
         a.lead_id === id && a.starts_at >= nowISO
@@ -360,6 +377,7 @@ export default function FunnelBoard({
         <HandoffModal
           lead={handoffLead}
           closers={closers}
+          currentUserId={currentUserId}
           onConfirm={handoff}
           onClose={() => setHandoffLead(null)}
         />

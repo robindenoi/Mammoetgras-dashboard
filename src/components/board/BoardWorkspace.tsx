@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { Lead, Profile, Appointment } from "@/lib/types";
+import type { Lead, Profile, Appointment, Role } from "@/lib/types";
 import FunnelBoard from "./FunnelBoard";
 import AgendaView from "@/components/calendar/AgendaView";
 
@@ -11,10 +11,11 @@ interface Props {
   funnel: "agent" | "closing";
   closers: Profile[];
   profilesById: Record<string, Profile>;
-  people: Profile[]; // voor de agenda (eigenaren)
+  people: Profile[];
   currentUserId: string;
-  // Persoonsfilter (bij closing: kies wiens bord/agenda)
+  currentUserRole: Role;
   personFilter?: Profile[];
+  handedOffLeadCloser?: Record<string, string>;
 }
 
 type View = "bord" | "agenda";
@@ -27,7 +28,9 @@ export default function BoardWorkspace({
   profilesById,
   people,
   currentUserId,
+  currentUserRole,
   personFilter,
+  handedOffLeadCloser,
 }: Props) {
   const [view, setView] = useState<View>("bord");
   const [boardPerson, setBoardPerson] = useState<string>("all");
@@ -36,14 +39,11 @@ export default function BoardWorkspace({
 
   const showPersonFilter = !!personFilter && personFilter.length > 0;
 
-  // Bord: leads gefilterd op gekozen closer. Bij "all" alles.
   const filteredLeads = useMemo(() => {
     if (!showPersonFilter || boardPerson === "all") return initialLeads;
     return initialLeads.filter((l) => l.closer_id === boardPerson);
   }, [initialLeads, boardPerson, showPersonFilter]);
 
-  // Agenda-eigenaar: bij persoonsfilter de gekozen persoon (iedereen mogelijk);
-  // anders de eigen agenda.
   const agendaOwner = showPersonFilter ? agendaPerson : currentUserId;
 
   return (
@@ -121,7 +121,10 @@ export default function BoardWorkspace({
           setAppointments={setAppts}
           people={people}
           currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
           filterOwner={agendaOwner}
+          handedOffLeadCloser={handedOffLeadCloser}
+          profilesById={profilesById}
         />
       )}
     </div>

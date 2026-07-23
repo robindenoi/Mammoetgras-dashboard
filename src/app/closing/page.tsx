@@ -43,6 +43,7 @@ export default async function ClosingPage() {
         profilesById={profilesById}
         people={all.filter((p) => p.active)}
         currentUserId={profile.id}
+        currentUserRole={profile.role}
         personFilter={personFilter}
       />
     </main>

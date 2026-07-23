@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Appointment, Profile, AppointmentType } from "@/lib/types";
+import type { Appointment, Profile, AppointmentType, Role } from "@/lib/types";
 import { amsterdamLocalToISO, isoToAmsterdamLocal, formatTime } from "@/lib/time";
 
 interface Props {
@@ -10,8 +10,9 @@ interface Props {
   people: Profile[];
   defaultOwnerId: string;
   currentUserId: string;
-  defaultDate?: string; // yyyy-MM-dd
-  defaultStart?: string; // yyyy-MM-ddTHH:mm (heeft voorrang op defaultDate)
+  currentUserRole: Role | null;
+  defaultDate?: string;
+  defaultStart?: string;
   onSaved: (appt: Appointment) => void;
   onDeleted: (id: string) => void;
   onClose: () => void;
@@ -32,6 +33,7 @@ export default function AppointmentForm({
   people,
   defaultOwnerId,
   currentUserId,
+  currentUserRole,
   defaultDate,
   defaultStart,
   onSaved,
@@ -55,6 +57,26 @@ export default function AppointmentForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const canTakeOver =
+    appointment &&
+    appointment.owner_id !== currentUserId &&
+    (currentUserRole === "closer" || currentUserRole === "admin");
+
+  async function takeOver() {
+    if (!appointment) return;
+    setBusy(true);
+    const supabase = createClient();
+    const { data, error: err } = await supabase
+      .from("appointments")
+      .update({ owner_id: currentUserId })
+      .eq("id", appointment.id)
+      .select()
+      .single();
+    if (err) setError(err.message);
+    else onSaved(data as Appointment);
+    setBusy(false);
+  }
+
   async function save(force: boolean) {
     setError(null);
     if (!start.includes("T") || start.startsWith("T")) {
@@ -70,7 +92,6 @@ export default function AppointmentForm({
 
     const supabase = createClient();
 
-    // Overlap-check (waarschuwing, niet blokkerend).
     if (!force) {
       let q = supabase
         .from("appointments")
@@ -167,6 +188,16 @@ export default function AppointmentForm({
               ))}
             </ul>
           </div>
+        )}
+
+        {canTakeOver && (
+          <button
+            onClick={takeOver}
+            disabled={busy}
+            className="mb-4 w-full rounded-xl bg-mg-dark py-3 text-sm font-bold text-white hover:bg-mg-green disabled:opacity-50"
+          >
+            {busy ? "Bezig..." : "Afspraak overnemen"}
+          </button>
         )}
 
         <div className="space-y-3">
