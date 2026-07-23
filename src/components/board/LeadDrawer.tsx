@@ -89,6 +89,23 @@ export default function LeadDrawer({
   const [apptDuration, setApptDuration] = useState(30);
   const [editingApptId, setEditingApptId] = useState<string | null>(null);
   const [savingAppt, setSavingAppt] = useState(false);
+  const [waStatus, setWaStatus] = useState<
+    Record<string, "sending" | "sent" | "error">
+  >({});
+
+  async function sendWhatsappNow(apptId: string) {
+    setWaStatus((s) => ({ ...s, [apptId]: "sending" }));
+    try {
+      const res = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId: apptId }),
+      });
+      setWaStatus((s) => ({ ...s, [apptId]: res.ok ? "sent" : "error" }));
+    } catch {
+      setWaStatus((s) => ({ ...s, [apptId]: "error" }));
+    }
+  }
 
   const canTakeBack =
     funnel === "closing" &&
@@ -288,32 +305,54 @@ export default function LeadDrawer({
                   .map((a) => (
                     <li
                       key={a.id}
-                      className="flex items-center justify-between rounded-lg bg-mg-green/10 px-3 py-2 text-sm"
+                      className="rounded-lg bg-mg-green/10 px-3 py-2 text-sm"
                     >
-                      <span className="font-medium text-mg-dark">
-                        {formatDateTime(a.starts_at)}
-                        <span className="ml-2 text-xs font-normal text-gray-500">
-                          {durationMinutes(a.starts_at, a.ends_at)} min
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-mg-dark">
+                          {formatDateTime(a.starts_at)}
+                          <span className="ml-2 text-xs font-normal text-gray-500">
+                            {durationMinutes(a.starts_at, a.ends_at)} min
+                          </span>
                         </span>
-                      </span>
-                      {!readOnly && (
-                        <span className="flex gap-2">
+                        {!readOnly && (
+                          <span className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingApptId(a.id);
+                                setApptStart(isoToAmsterdamLocal(a.starts_at));
+                              }}
+                              className="text-xs font-medium text-mg-green hover:underline"
+                            >
+                              bewerk
+                            </button>
+                            <button
+                              onClick={() => onDeleteAppt(a.id)}
+                              className="text-xs font-medium text-red-500 hover:underline"
+                            >
+                              verwijder
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                      {!readOnly && lead.phone && (
+                        <div className="mt-1.5 flex items-center gap-2">
                           <button
-                            onClick={() => {
-                              setEditingApptId(a.id);
-                              setApptStart(isoToAmsterdamLocal(a.starts_at));
-                            }}
-                            className="text-xs font-medium text-mg-green hover:underline"
+                            onClick={() => sendWhatsappNow(a.id)}
+                            disabled={waStatus[a.id] === "sending"}
+                            className="inline-flex items-center gap-1 rounded-md bg-[#25D366] px-2 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
                           >
-                            bewerk
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.51 5.26l-.999 3.648 3.978-1.719z" />
+                            </svg>
+                            {waStatus[a.id] === "sending" ? "Versturen..." : "Nu appen"}
                           </button>
-                          <button
-                            onClick={() => onDeleteAppt(a.id)}
-                            className="text-xs font-medium text-red-500 hover:underline"
-                          >
-                            verwijder
-                          </button>
-                        </span>
+                          {waStatus[a.id] === "sent" && (
+                            <span className="text-xs font-medium text-green-600">✓ Verstuurd</span>
+                          )}
+                          {waStatus[a.id] === "error" && (
+                            <span className="text-xs font-medium text-red-500">Mislukt</span>
+                          )}
+                        </div>
                       )}
                     </li>
                   ))}

@@ -87,6 +87,7 @@ export interface Lead {
   position: number;
   voicemail_count: number;
   closer_voicemail_count: number;
+  whatsapp_opt_in: boolean;
   owner_history: OwnerHistoryEntry[];
   created_at: string;
   updated_at: string;
@@ -111,4 +112,6 @@ export interface Appointment {
   note: string | null;
   created_by: string | null;
   created_at: string;
+  reminder_enabled: boolean;
+  reminder_sent_at: string | null;
 }
