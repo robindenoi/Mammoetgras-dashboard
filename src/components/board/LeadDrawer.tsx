@@ -152,16 +152,23 @@ export default function LeadDrawer({
     !readOnly && funnel === "agent" && isFinalAgentStage(lead.stage);
 
   const knownKeys = new Set<string>(EXTRA_FIELDS.map((f) => f.key));
-  // Duration en contactpersoon tonen we apart; laat ze uit de generieke grid.
+  // Gespreksduur kan onder verschillende kolomnamen binnenkomen (duration,
+  // Duration, Duur, Gespreksduur, ...). Zoek daarom hoofdletter-ongevoelig.
+  const durationKey = Object.keys(lead.extra).find((k) => {
+    const s = k.toLowerCase();
+    return s.includes("duration") || s.includes("duur");
+  });
+  const duration = durationKey ? lead.extra[durationKey] : undefined;
+  const contactpersoon = lead.extra["contactpersoon"];
+
+  // Duration, contactpersoon apart tonen; laat ze uit de generieke lijsten.
   const gridSkip = new Set(["duration", "contactpersoon"]);
   const knownExtra = EXTRA_FIELDS.filter(
     (f) => lead.extra[f.key] && !gridSkip.has(f.key)
   );
   const unknownExtra = Object.entries(lead.extra).filter(
-    ([k]) => !knownKeys.has(k)
+    ([k]) => !knownKeys.has(k) && k !== durationKey
   );
-  const duration = lead.extra["duration"];
-  const contactpersoon = lead.extra["contactpersoon"];
 
   const ownerHistory = lead.owner_history ?? [];
 
