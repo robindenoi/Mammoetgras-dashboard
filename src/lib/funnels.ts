@@ -5,6 +5,7 @@ export const AGENT_STAGES = [
   "Terugbelafspraak",
   "Klaar om door te zetten",
   "Teruggenomen van closer",
+  "Afgevallen",
 ] as const;
 
 export const CLOSING_STAGES = [
@@ -12,7 +13,8 @@ export const CLOSING_STAGES = [
   "Closing-afspraak",
   "Aanvullende info",
   "Inschrijving verzonden",
-  "Gesloten",
+  "Deal",
+  "Afgevallen",
 ] as const;
 
 export type AgentStage = (typeof AGENT_STAGES)[number];
@@ -24,4 +26,8 @@ export function stagesFor(funnel: "agent" | "closing"): readonly string[] {
 
 export function isFinalAgentStage(stage: string): boolean {
   return stage === "Klaar om door te zetten";
+}
+
+export function isDealStage(stage: string): boolean {
+  return stage === "Deal";
 }

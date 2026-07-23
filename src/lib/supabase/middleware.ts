@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const PROTECTED_PREFIXES = [
   "/leads",
   "/closing",
+  "/deals",
   "/agenda",
   "/import",
   "/beheer",

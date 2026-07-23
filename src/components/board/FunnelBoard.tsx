@@ -4,7 +4,8 @@ import { useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead, Profile, Appointment, Priority, Role } from "@/lib/types";
 import { PRIORITY_RANK } from "@/lib/types";
-import { stagesFor, CLOSING_STAGES, AGENT_STAGES } from "@/lib/funnels";
+import { stagesFor, CLOSING_STAGES, AGENT_STAGES, isDealStage } from "@/lib/funnels";
+import { fireConfetti } from "@/lib/confetti";
 import LeadCard from "./LeadCard";
 import LeadDrawer from "./LeadDrawer";
 import HandoffModal from "./HandoffModal";
@@ -126,6 +127,8 @@ export default function FunnelBoard({
     if (err) {
       setError(err.message);
       setLeads(prev);
+    } else if (changes.stage && isDealStage(changes.stage)) {
+      fireConfetti();
     }
   }
 
@@ -256,6 +259,7 @@ export default function FunnelBoard({
     setHandoffLead(null);
     setSelectedId(null);
     onHandoffDone?.(id, closerId);
+    fireConfetti();
   }
 
   async function takeBack(leadId: string) {
