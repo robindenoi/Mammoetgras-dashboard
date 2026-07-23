@@ -24,8 +24,11 @@ export default async function ClosingPage() {
   const profilesById = Object.fromEntries(all.map((p) => [p.id, p]));
   const closers = all.filter((p) => p.role === "closer" && p.active);
 
-  const personFilter =
-    profile.role === "admin" || profile.role === "agent" ? closers : undefined;
+  // Closers, admins én kijkende agents krijgen de persoonfilter, zodat closers
+  // elkaars borden/agenda's kunnen inzien (bij nood/afwezigheid). Een closer
+  // start standaard op zijn eigen bord.
+  const personFilter = closers;
+  const defaultPerson = profile.role === "closer" ? profile.id : "all";
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
@@ -47,6 +50,7 @@ export default async function ClosingPage() {
         currentUserId={profile.id}
         currentUserRole={profile.role}
         personFilter={personFilter}
+        defaultPerson={defaultPerson}
       />
     </main>
   );

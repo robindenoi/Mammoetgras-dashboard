@@ -37,15 +37,17 @@ export type AppointmentType = "terugbel" | "closing";
 export type Priority = "hoog" | "midden" | "laag";
 
 export const PRIORITIES: Priority[] = ["hoog", "midden", "laag"];
+// Labels hernoemd naar sales-termen (action-point 9). De onderliggende
+// enum-waarden (hoog/midden/laag) blijven ongewijzigd in de database.
 export const PRIORITY_LABELS: Record<Priority, string> = {
-  hoog: "Hoog",
-  midden: "Midden",
-  laag: "Laag",
+  hoog: "Closing afspraak",
+  midden: "Niet gelezen",
+  laag: "Vervolg gesprek",
 };
 export const PRIORITY_COLORS: Record<Priority, string> = {
-  hoog: "bg-red-100 text-red-700",
-  midden: "bg-amber-100 text-amber-700",
-  laag: "bg-gray-100 text-gray-600",
+  hoog: "bg-emerald-100 text-emerald-700",
+  midden: "bg-gray-100 text-gray-600",
+  laag: "bg-blue-100 text-blue-700",
 };
 export const PRIORITY_RANK: Record<Priority, number> = {
   hoog: 0,
@@ -84,6 +86,7 @@ export interface Lead {
   priority: Priority;
   position: number;
   voicemail_count: number;
+  closer_voicemail_count: number;
   owner_history: OwnerHistoryEntry[];
   created_at: string;
   updated_at: string;

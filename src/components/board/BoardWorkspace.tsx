@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import type { Lead, Profile, Appointment, Role } from "@/lib/types";
 import FunnelBoard from "./FunnelBoard";
 import AgendaView from "@/components/calendar/AgendaView";
@@ -15,6 +16,7 @@ interface Props {
   currentUserId: string;
   currentUserRole: Role;
   personFilter?: Profile[];
+  defaultPerson?: string;
   handedOffLeadCloser?: Record<string, string>;
 }
 
@@ -30,11 +32,12 @@ export default function BoardWorkspace({
   currentUserId,
   currentUserRole,
   personFilter,
+  defaultPerson = "all",
   handedOffLeadCloser: initialHandedOff,
 }: Props) {
   const [view, setView] = useState<View>("bord");
-  const [boardPerson, setBoardPerson] = useState<string>("all");
-  const [agendaPerson, setAgendaPerson] = useState<string>("all");
+  const [boardPerson, setBoardPerson] = useState<string>(defaultPerson);
+  const [agendaPerson, setAgendaPerson] = useState<string>(defaultPerson);
   const [appts, setAppts] = useState<Appointment[]>(initialAppointments);
   const [handedOffMap, setHandedOffMap] = useState<Record<string, string>>(
     initialHandedOff ?? {}
@@ -58,6 +61,18 @@ export default function BoardWorkspace({
 
   const onHandoff = useCallback((leadId: string, closerId: string) => {
     setHandedOffMap((prev) => ({ ...prev, [leadId]: closerId }));
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from("appointments")
+        .select("*")
+        .order("starts_at");
+      if (data) setAppts(data as Appointment[]);
+    }, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   return (

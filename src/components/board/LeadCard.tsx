@@ -11,6 +11,7 @@ interface Props {
   draggable?: boolean;
   dragging?: boolean;
   highlight?: boolean;
+  dealLocked?: boolean;
   onDragStart?: () => void;
   onDragEnd?: () => void;
   onOpen: () => void;
@@ -23,6 +24,7 @@ export default function LeadCard({
   draggable,
   dragging,
   highlight,
+  dealLocked,
   onDragStart,
   onDragEnd,
   onOpen,
@@ -31,6 +33,28 @@ export default function LeadCard({
   const stad = lead.extra["stad"];
   const isToday =
     nextAppt && sameAmsterdamDay(nextAppt.starts_at, new Date());
+
+  // Deal-privacy: in de Deal-stage alleen de naam + felicitatie tonen.
+  if (dealLocked) {
+    return (
+      <button
+        draggable={draggable}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onClick={onOpen}
+        className={`flex w-full flex-col gap-0.5 rounded-xl bg-emerald-50 p-4 text-left shadow-sm ring-1 ring-emerald-200 transition-all hover:shadow-md ${
+          draggable ? "cursor-grab active:cursor-grabbing" : ""
+        } ${dragging ? "opacity-40" : ""}`}
+      >
+        <span className="font-semibold text-emerald-800">
+          {lead.full_name || "Naamloze lead"}
+        </span>
+        <span className="text-sm font-medium text-emerald-600">
+          🎉 Gefeliciteerd, deal
+        </span>
+      </button>
+    );
+  }
 
   return (
     <>

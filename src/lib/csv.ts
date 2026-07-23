@@ -15,6 +15,7 @@ export type CoreField = (typeof CORE_FIELDS)[number];
 // getoond bij de lead. Volgorde bepaalt de weergave in het lead-scherm.
 export const EXTRA_FIELDS = [
   { key: "contactpersoon", label: "Contactpersoon" },
+  { key: "duration", label: "Gespreksduur" },
   { key: "gespreksresultaat", label: "Gespreksresultaat" },
   { key: "commentaar", label: "Commentaar" },
   { key: "terugbelvenster", label: "Terugbel-venster" },

@@ -3,8 +3,16 @@
 import { useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead, Profile, Appointment, Priority, Role } from "@/lib/types";
-import { PRIORITY_RANK } from "@/lib/types";
-import { stagesFor, CLOSING_STAGES, AGENT_STAGES, isDealStage } from "@/lib/funnels";
+import { PRIORITY_RANK, PRIORITIES, PRIORITY_LABELS } from "@/lib/types";
+import {
+  stagesFor,
+  CLOSING_STAGES,
+  isDealStage,
+  isClosingAfgevallen,
+  AGENT_AFGEVALLEN_STAGE,
+  AGENT_TERUGGENOMEN_STAGE,
+  CLOSER_VOICEMAIL_LIMIT,
+} from "@/lib/funnels";
 import { fireConfetti } from "@/lib/confetti";
 import LeadCard from "./LeadCard";
 import LeadDrawer from "./LeadDrawer";
@@ -41,6 +49,7 @@ export default function FunnelBoard({
   const [handoffLead, setHandoffLead] = useState<Lead | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [labelFilter, setLabelFilter] = useState<Priority | "all">("all");
   const [sort, setSort] = useState<SortKey>("handmatig");
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<string | null>(null);
@@ -115,7 +124,14 @@ export default function FunnelBoard({
   }
 
   const visibleByStage = (stage: string) =>
-    leads.filter((l) => l.stage === stage && matchSearch(l)).sort(compare);
+    leads
+      .filter(
+        (l) =>
+          l.stage === stage &&
+          matchSearch(l) &&
+          (labelFilter === "all" || l.priority === labelFilter)
+      )
+      .sort(compare);
 
   async function patchLead(id: string, changes: Partial<Lead>) {
     const lead = leads.find((l) => l.id === id);
@@ -132,11 +148,48 @@ export default function FunnelBoard({
     }
   }
 
+  // Kaart terug naar de oorspronkelijke sales agent (agent_id). Notities blijven
+  // aan de lead gekoppeld en verhuizen dus mee; afspraken gaan via RPC mee.
+  async function returnToAgent(lead: Lead, targetStage: string) {
+    const agentId = lead.agent_id;
+    const supabase = createClient();
+    const { error: err } = await supabase
+      .from("leads")
+      .update({
+        funnel: "agent",
+        stage: targetStage,
+        closer_voicemail_count: 0,
+      })
+      .eq("id", lead.id);
+    if (err) return setError(err.message);
+
+    if (agentId) {
+      await supabase.rpc("move_lead_appointments", {
+        p_lead_id: lead.id,
+        p_new_owner: agentId,
+      });
+      setAppts((prev) =>
+        prev.map((a) =>
+          a.lead_id === lead.id ? { ...a, owner_id: agentId } : a
+        )
+      );
+    }
+    setLeads((ls) => ls.filter((l) => l.id !== lead.id));
+    setHandoffLead(null);
+    setSelectedId(null);
+  }
+
   async function reorder(draggedId: string, targetStage: string, beforeId: string | null) {
     if (isReadOnly) return;
     const dragged = leads.find((l) => l.id === draggedId);
     if (!dragged) return;
     if (draggedId === beforeId) return;
+
+    // Slepen naar "Afgevallen" in de closing-funnel → terug naar de agent.
+    if (funnel === "closing" && isClosingAfgevallen(targetStage)) {
+      await returnToAgent(dragged, AGENT_AFGEVALLEN_STAGE);
+      return;
+    }
 
     const targetList = leads
       .filter((l) => l.stage === targetStage && l.id !== draggedId)
@@ -262,16 +315,28 @@ export default function FunnelBoard({
     fireConfetti();
   }
 
+  // Agent pakt zijn eigen kaart terug van een closer. Afspraken verhuizen mee
+  // naar de agent, zodat ze niet in de agenda van de closer blijven hangen.
   async function takeBack(leadId: string) {
     const supabase = createClient();
     const { error: err } = await supabase
       .from("leads")
       .update({
         funnel: "agent",
-        stage: "Teruggenomen van closer",
+        stage: AGENT_TERUGGENOMEN_STAGE,
+        closer_voicemail_count: 0,
       })
       .eq("id", leadId);
     if (err) return setError(err.message);
+    await supabase.rpc("move_lead_appointments", {
+      p_lead_id: leadId,
+      p_new_owner: currentUserId,
+    });
+    setAppts((prev) =>
+      prev.map((a) =>
+        a.lead_id === leadId ? { ...a, owner_id: currentUserId } : a
+      )
+    );
     setLeads((ls) => ls.filter((l) => l.id !== leadId));
     setSelectedId(null);
   }
@@ -315,6 +380,19 @@ export default function FunnelBoard({
               + Nieuwe lead
             </button>
           )}
+          <label className="text-sm text-gray-500">Label:</label>
+          <select
+            value={labelFilter}
+            onChange={(e) => setLabelFilter(e.target.value as Priority | "all")}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
+          >
+            <option value="all">Alle labels</option>
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {PRIORITY_LABELS[p]}
+              </option>
+            ))}
+          </select>
           <label className="text-sm text-gray-500">Sorteer:</label>
           <select
             value={sort}
@@ -322,7 +400,7 @@ export default function FunnelBoard({
             className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
           >
             <option value="handmatig">Handmatig (sleepvolgorde)</option>
-            <option value="prioriteit">Prioriteit (hoog eerst)</option>
+            <option value="prioriteit">Label (Closing afspraak eerst)</option>
             <option value="afspraak">Eerstvolgende afspraak</option>
             <option value="nieuw">Nieuwste eerst</option>
             <option value="oud">Oudste eerst</option>
@@ -396,6 +474,7 @@ export default function FunnelBoard({
                                 ? profilesById[lead.agent_id]?.full_name
                                 : null
                             }
+                            dealLocked={funnel === "closing" && isDealStage(lead.stage)}
                             dragging={dragId === lead.id}
                             draggable={!isReadOnly || editable}
                             onDragStart={() => { if (!isReadOnly) setDragId(lead.id); }}
@@ -427,13 +506,31 @@ export default function FunnelBoard({
           profilesById={profilesById}
           leadAppts={apptsByLead[selected.id] ?? []}
           readOnly={isReadOnly && !canEditLead(selected)}
-          onMove={(stage) => patchLead(selected.id, { stage })}
+          dealLocked={funnel === "closing" && isDealStage(selected.stage)}
+          onMove={(stage) => {
+            if (funnel === "closing" && isClosingAfgevallen(stage)) {
+              returnToAgent(selected, AGENT_AFGEVALLEN_STAGE);
+            } else {
+              patchLead(selected.id, { stage });
+            }
+          }}
           onPriority={(p: Priority) => patchLead(selected.id, { priority: p })}
-          onVoicemail={(value) => patchLead(selected.id, { voicemail_count: value })}
+          onVoicemail={(value) => {
+            if (funnel === "closing") {
+              if (value >= CLOSER_VOICEMAIL_LIMIT) {
+                returnToAgent(selected, AGENT_TERUGGENOMEN_STAGE);
+              } else {
+                patchLead(selected.id, { closer_voicemail_count: value });
+              }
+            } else {
+              patchLead(selected.id, { voicemail_count: value });
+            }
+          }}
           onSaveAppt={(s, e, id) => saveAppt(selected.id, s, e, id)}
           onDeleteAppt={deleteAppt}
           onHandoff={() => setHandoffLead(selected)}
           onTakeBack={() => takeBack(selected.id)}
+          onSendBack={() => returnToAgent(selected, AGENT_TERUGGENOMEN_STAGE)}
           onClose={() => setSelectedId(null)}
         />
       )}
