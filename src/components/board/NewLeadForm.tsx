@@ -57,7 +57,6 @@ export default function NewLeadForm({
         funnel,
         stage: stages[0],
         priority: "midden",
-        position: 0,
       })
       .select()
       .single();
