@@ -8,6 +8,7 @@ import type {
   Profile,
   Appointment,
   Priority,
+  Role,
 } from "@/lib/types";
 import { PRIORITIES, PRIORITY_LABELS, PRIORITY_COLORS } from "@/lib/types";
 import { isFinalAgentStage } from "@/lib/funnels";
@@ -20,14 +21,17 @@ interface Props {
   stages: readonly string[];
   funnel: "agent" | "closing";
   currentUserId: string;
+  currentUserRole: Role;
   profilesById: Record<string, Profile>;
   leadAppts: Appointment[];
+  readOnly?: boolean;
   onMove: (stage: string) => void;
   onPriority: (p: Priority) => void;
   onVoicemail: (value: number) => void;
   onSaveAppt: (startsISO: string, endsISO: string, id?: string) => Promise<void>;
   onDeleteAppt: (id: string) => Promise<void>;
   onHandoff: () => void;
+  onTakeBack?: () => void;
   onClose: () => void;
 }
 
@@ -36,14 +40,17 @@ export default function LeadDrawer({
   stages,
   funnel,
   currentUserId,
+  currentUserRole,
   profilesById,
   leadAppts,
+  readOnly,
   onMove,
   onPriority,
   onVoicemail,
   onSaveAppt,
   onDeleteAppt,
   onHandoff,
+  onTakeBack,
   onClose,
 }: Props) {
   const [comments, setComments] = useState<LeadComment[]>([]);
@@ -51,13 +58,20 @@ export default function LeadDrawer({
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
 
-  // Opvolgafspraak-formulier
   const [apptStart, setApptStart] = useState("");
   const [apptDuration, setApptDuration] = useState(30);
   const [editingApptId, setEditingApptId] = useState<string | null>(null);
   const [savingAppt, setSavingAppt] = useState(false);
 
+  const isOwnCard =
+    lead.agent_id === currentUserId || lead.closer_id === currentUserId;
+  const canTakeBack =
+    funnel === "closing" &&
+    currentUserRole === "agent" &&
+    lead.agent_id === currentUserId;
+
   async function submitAppt() {
+    if (readOnly) return;
     if (!apptStart.includes("T") || apptStart.startsWith("T")) return;
     setSavingAppt(true);
     const startsISO = amsterdamLocalToISO(apptStart);
@@ -100,13 +114,20 @@ export default function LeadDrawer({
     setPosting(false);
   }
 
-  const showHandoff = funnel === "agent" && isFinalAgentStage(lead.stage);
+  const showHandoff = !readOnly && funnel === "agent" && isFinalAgentStage(lead.stage);
 
   const knownKeys = new Set<string>(EXTRA_FIELDS.map((f) => f.key));
   const knownExtra = EXTRA_FIELDS.filter((f) => lead.extra[f.key]);
   const unknownExtra = Object.entries(lead.extra).filter(
     ([k]) => !knownKeys.has(k)
   );
+
+  const ownerHistory = lead.owner_history ?? [];
+
+  function profileName(id: string | null): string {
+    if (!id) return "onbekend";
+    return profilesById[id]?.full_name || "onbekend";
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
@@ -131,6 +152,11 @@ export default function LeadDrawer({
                 </>
               )}
             </p>
+            {readOnly && (
+              <p className="mt-1 text-xs font-medium text-blue-600">
+                Alleen-lezen
+              </p>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -165,26 +191,37 @@ export default function LeadDrawer({
             </div>
           )}
 
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Prioriteit
-            </label>
-            <div className="flex gap-2">
-              {PRIORITIES.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => onPriority(p)}
-                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                    lead.priority === p
-                      ? PRIORITY_COLORS[p] + " ring-2 ring-offset-1 ring-current"
-                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                  }`}
-                >
-                  {PRIORITY_LABELS[p]}
-                </button>
-              ))}
+          {canTakeBack && onTakeBack && (
+            <button
+              onClick={onTakeBack}
+              className="w-full rounded-xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600"
+            >
+              Terugpakken naar mijn bord
+            </button>
+          )}
+
+          {!readOnly && (
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Prioriteit
+              </label>
+              <div className="flex gap-2">
+                {PRIORITIES.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => onPriority(p)}
+                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                      lead.priority === p
+                        ? PRIORITY_COLORS[p] + " ring-2 ring-offset-1 ring-current"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                  >
+                    {PRIORITY_LABELS[p]}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -203,56 +240,62 @@ export default function LeadDrawer({
                       <span className="font-medium text-mg-dark">
                         {formatDateTime(a.starts_at)}
                       </span>
-                      <span className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingApptId(a.id);
-                            setApptStart(isoToAmsterdamLocal(a.starts_at));
-                          }}
-                          className="text-xs font-medium text-mg-green hover:underline"
-                        >
-                          bewerk
-                        </button>
-                        <button
-                          onClick={() => onDeleteAppt(a.id)}
-                          className="text-xs font-medium text-red-500 hover:underline"
-                        >
-                          verwijder
-                        </button>
-                      </span>
+                      {!readOnly && (
+                        <span className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingApptId(a.id);
+                              setApptStart(isoToAmsterdamLocal(a.starts_at));
+                            }}
+                            className="text-xs font-medium text-mg-green hover:underline"
+                          >
+                            bewerk
+                          </button>
+                          <button
+                            onClick={() => onDeleteAppt(a.id)}
+                            className="text-xs font-medium text-red-500 hover:underline"
+                          >
+                            verwijder
+                          </button>
+                        </span>
+                      )}
                     </li>
                   ))}
               </ul>
             )}
-            <div className="flex flex-wrap items-end gap-2">
-              <input
-                type="datetime-local"
-                value={apptStart}
-                onChange={(e) => setApptStart(e.target.value)}
-                className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
-              />
-              <select
-                value={apptDuration}
-                onChange={(e) => setApptDuration(Number(e.target.value))}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
-              >
-                {[15, 30, 45, 60].map((d) => (
-                  <option key={d} value={d}>
-                    {d} min
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={submitAppt}
-                disabled={savingAppt || !apptStart}
-                className="rounded-lg bg-mg-green px-4 py-2 text-sm font-semibold text-white hover:bg-mg-accent disabled:opacity-50"
-              >
-                {editingApptId ? "Bijwerken" : "Inplannen"}
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-gray-400">
-              Verschijnt ook in de agenda.
-            </p>
+            {!readOnly && (
+              <>
+                <div className="flex flex-wrap items-end gap-2">
+                  <input
+                    type="datetime-local"
+                    value={apptStart}
+                    onChange={(e) => setApptStart(e.target.value)}
+                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
+                  />
+                  <select
+                    value={apptDuration}
+                    onChange={(e) => setApptDuration(Number(e.target.value))}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
+                  >
+                    {[15, 30, 45, 60].map((d) => (
+                      <option key={d} value={d}>
+                        {d} min
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={submitAppt}
+                    disabled={savingAppt || !apptStart}
+                    className="rounded-lg bg-mg-green px-4 py-2 text-sm font-semibold text-white hover:bg-mg-accent disabled:opacity-50"
+                  >
+                    {editingApptId ? "Bijwerken" : "Inplannen"}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-400">
+                  Verschijnt ook in de agenda.
+                </p>
+              </>
+            )}
           </div>
 
           {knownExtra.length > 0 && (
@@ -268,35 +311,39 @@ export default function LeadDrawer({
             </dl>
           )}
 
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Stage
-            </label>
-            <StagePicker stages={stages} value={lead.stage} onChange={onMove} />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Voicemails
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => onVoicemail(Math.max(0, lead.voicemail_count - 1))}
-                className="h-10 w-10 rounded-lg bg-gray-100 text-lg font-bold text-gray-700 hover:bg-gray-200"
-              >
-                −
-              </button>
-              <span className="min-w-[2ch] text-center text-lg font-bold text-mg-dark">
-                {lead.voicemail_count}
-              </span>
-              <button
-                onClick={() => onVoicemail(lead.voicemail_count + 1)}
-                className="h-10 w-10 rounded-lg bg-mg-green/10 text-lg font-bold text-mg-green hover:bg-mg-green/20"
-              >
-                +
-              </button>
+          {!readOnly && (
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Stage
+              </label>
+              <StagePicker stages={stages} value={lead.stage} onChange={onMove} />
             </div>
-          </div>
+          )}
+
+          {!readOnly && (
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Voicemails
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => onVoicemail(Math.max(0, lead.voicemail_count - 1))}
+                  className="h-10 w-10 rounded-lg bg-gray-100 text-lg font-bold text-gray-700 hover:bg-gray-200"
+                >
+                  −
+                </button>
+                <span className="min-w-[2ch] text-center text-lg font-bold text-mg-dark">
+                  {lead.voicemail_count}
+                </span>
+                <button
+                  onClick={() => onVoicemail(lead.voicemail_count + 1)}
+                  className="h-10 w-10 rounded-lg bg-mg-green/10 text-lg font-bold text-mg-green hover:bg-mg-green/20"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )}
 
           {showHandoff && (
             <button
@@ -305,6 +352,39 @@ export default function LeadDrawer({
             >
               Doorzetten naar closer →
             </button>
+          )}
+
+          {ownerHistory.length > 0 && (
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Eigenaarsgeschiedenis
+              </label>
+              <ol className="relative ml-3 border-l-2 border-gray-200">
+                {ownerHistory.map((entry, i) => (
+                  <li key={i} className="mb-3 ml-4 last:mb-0">
+                    <span className="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full border-2 border-white bg-gray-400" />
+                    <p className="text-sm text-gray-700">
+                      {entry.action === "doorgezet" ? (
+                        <>
+                          <span className="font-semibold">{profileName(entry.from)}</span>
+                          {" → "}
+                          <span className="font-semibold">{profileName(entry.to)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-semibold">{profileName(entry.to)}</span>
+                          {" heeft teruggenomen van "}
+                          <span className="font-semibold">{profileName(entry.from)}</span>
+                        </>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {formatDateTime(entry.at)}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
 
           {unknownExtra.length > 0 && (

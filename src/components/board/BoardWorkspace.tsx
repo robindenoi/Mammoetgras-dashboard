@@ -114,6 +114,7 @@ export default function BoardWorkspace({
           closers={closers}
           profilesById={profilesById}
           currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
         />
       ) : (
         <AgendaView

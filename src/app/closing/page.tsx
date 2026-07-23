@@ -6,7 +6,7 @@ import BoardWorkspace from "@/components/board/BoardWorkspace";
 export const revalidate = 0;
 
 export default async function ClosingPage() {
-  const profile = await requireRole("closer", "admin");
+  const profile = await requireRole("closer", "admin", "agent");
   const supabase = await createClient();
 
   const [{ data: leads }, { data: profiles }, { data: appts }] =
@@ -24,8 +24,8 @@ export default async function ClosingPage() {
   const profilesById = Object.fromEntries(all.map((p) => [p.id, p]));
   const closers = all.filter((p) => p.role === "closer" && p.active);
 
-  // Admin mag kiezen wiens bord/agenda; een closer ziet alleen zichzelf.
-  const personFilter = profile.role === "admin" ? closers : undefined;
+  const personFilter =
+    profile.role === "admin" || profile.role === "agent" ? closers : undefined;
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
@@ -33,7 +33,9 @@ export default async function ClosingPage() {
         Closing
       </h1>
       <p className="mb-6 text-gray-500">
-        Doorgezette leads. Kies wiens bord en agenda je bekijkt.
+        {profile.role === "agent"
+          ? "Bekijk het closing-bord. Je kunt je eigen kaarten terugpakken."
+          : "Doorgezette leads. Kies wiens bord en agenda je bekijkt."}
       </p>
       <BoardWorkspace
         initialLeads={(leads as Lead[]) ?? []}

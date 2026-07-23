@@ -2,9 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Lead, Profile, Appointment, Priority } from "@/lib/types";
+import type { Lead, Profile, Appointment, Priority, Role } from "@/lib/types";
 import { PRIORITY_RANK } from "@/lib/types";
-import { stagesFor, CLOSING_STAGES } from "@/lib/funnels";
+import { stagesFor, CLOSING_STAGES, AGENT_STAGES } from "@/lib/funnels";
 import LeadCard from "./LeadCard";
 import LeadDrawer from "./LeadDrawer";
 import HandoffModal from "./HandoffModal";
@@ -19,6 +19,7 @@ interface Props {
   closers: Profile[];
   profilesById: Record<string, Profile>;
   currentUserId: string;
+  currentUserRole: Role;
 }
 
 export default function FunnelBoard({
@@ -29,6 +30,7 @@ export default function FunnelBoard({
   closers,
   profilesById,
   currentUserId,
+  currentUserRole,
 }: Props) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -42,6 +44,14 @@ export default function FunnelBoard({
   const stages = stagesFor(funnel);
   const selected = leads.find((l) => l.id === selectedId) ?? null;
   const nowISO = new Date().toISOString();
+
+  // Agent op closing-bord = read-only (behalve eigen kaarten terugpakken)
+  const isReadOnly = funnel === "closing" && currentUserRole === "agent";
+
+  function canEditLead(lead: Lead): boolean {
+    if (!isReadOnly) return true;
+    return lead.agent_id === currentUserId;
+  }
 
   const nextApptByLead = useMemo(() => {
     const m: Record<string, Appointment> = {};
@@ -103,6 +113,8 @@ export default function FunnelBoard({
     leads.filter((l) => l.stage === stage && matchSearch(l)).sort(compare);
 
   async function patchLead(id: string, changes: Partial<Lead>) {
+    const lead = leads.find((l) => l.id === id);
+    if (lead && !canEditLead(lead)) return;
     const prev = leads;
     setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, ...changes } : l)));
     const supabase = createClient();
@@ -113,9 +125,8 @@ export default function FunnelBoard({
     }
   }
 
-  // Sleep-herschikking: dragged lead in targetStage plaatsen, vóór beforeId
-  // (of achteraan als beforeId null). Herschikt posities in die kolom.
   async function reorder(draggedId: string, targetStage: string, beforeId: string | null) {
+    if (isReadOnly) return;
     const dragged = leads.find((l) => l.id === draggedId);
     if (!dragged) return;
     if (draggedId === beforeId) return;
@@ -131,7 +142,6 @@ export default function FunnelBoard({
     const posById = new Map<string, number>();
     targetList.forEach((l, i) => posById.set(l.id, i));
 
-    // Optimistisch bijwerken
     setLeads((ls) =>
       ls.map((l) => {
         if (l.id === draggedId)
@@ -234,10 +244,30 @@ export default function FunnelBoard({
     setSelectedId(null);
   }
 
+  async function takeBack(leadId: string) {
+    const supabase = createClient();
+    const { error: err } = await supabase
+      .from("leads")
+      .update({
+        funnel: "agent",
+        stage: "Teruggenomen van closer",
+      })
+      .eq("id", leadId);
+    if (err) return setError(err.message);
+    setLeads((ls) => ls.filter((l) => l.id !== leadId));
+    setSelectedId(null);
+  }
+
   return (
     <div>
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {isReadOnly && (
+        <div className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-700">
+          Je bekijkt het closing-bord als kijker. Je kunt alleen je eigen kaarten terugpakken.
+        </div>
       )}
 
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -287,8 +317,10 @@ export default function FunnelBoard({
               <section
                 key={stage}
                 onDragOver={(e) => {
-                  e.preventDefault();
-                  setOverStage(stage);
+                  if (!isReadOnly) {
+                    e.preventDefault();
+                    setOverStage(stage);
+                  }
                 }}
                 onDragLeave={(e) => {
                   if (!e.currentTarget.contains(e.relatedTarget as Node))
@@ -296,12 +328,12 @@ export default function FunnelBoard({
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
-                  if (dragId) reorder(dragId, stage, null);
+                  if (!isReadOnly && dragId) reorder(dragId, stage, null);
                   setDragId(null);
                   setOverStage(null);
                 }}
                 className={`rounded-2xl p-2 transition-colors lg:w-72 lg:shrink-0 ${
-                  isOver ? "bg-mg-green/10 ring-2 ring-mg-green/40" : "bg-black/[0.02]"
+                  isOver && !isReadOnly ? "bg-mg-green/10 ring-2 ring-mg-green/40" : "bg-black/[0.02]"
                 }`}
               >
                 <div className="mb-2 flex items-center justify-between px-1 pt-1">
@@ -313,40 +345,44 @@ export default function FunnelBoard({
                 <div className="min-h-[3rem] space-y-2">
                   {items.length === 0 ? (
                     <p className="px-2 py-6 text-center text-xs text-gray-400">
-                      Sleep hierheen
+                      {isReadOnly ? "Geen kaarten" : "Sleep hierheen"}
                     </p>
                   ) : (
-                    items.map((lead) => (
-                      <div
-                        key={lead.id}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (dragId) reorder(dragId, lead.stage, lead.id);
-                          setDragId(null);
-                          setOverStage(null);
-                        }}
-                      >
-                        <LeadCard
-                          lead={lead}
-                          nextAppt={nextApptByLead[lead.id] ?? null}
-                          ownerName={
-                            lead.agent_id
-                              ? profilesById[lead.agent_id]?.full_name
-                              : null
-                          }
-                          dragging={dragId === lead.id}
-                          draggable
-                          onDragStart={() => setDragId(lead.id)}
-                          onDragEnd={() => {
+                    items.map((lead) => {
+                      const editable = canEditLead(lead);
+                      return (
+                        <div
+                          key={lead.id}
+                          onDragOver={(e) => { if (!isReadOnly) e.preventDefault(); }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!isReadOnly && dragId) reorder(dragId, lead.stage, lead.id);
                             setDragId(null);
                             setOverStage(null);
                           }}
-                          onOpen={() => setSelectedId(lead.id)}
-                        />
-                      </div>
-                    ))
+                        >
+                          <LeadCard
+                            lead={lead}
+                            nextAppt={nextApptByLead[lead.id] ?? null}
+                            ownerName={
+                              lead.agent_id
+                                ? profilesById[lead.agent_id]?.full_name
+                                : null
+                            }
+                            dragging={dragId === lead.id}
+                            draggable={!isReadOnly || editable}
+                            onDragStart={() => { if (!isReadOnly) setDragId(lead.id); }}
+                            onDragEnd={() => {
+                              setDragId(null);
+                              setOverStage(null);
+                            }}
+                            onOpen={() => setSelectedId(lead.id)}
+                            highlight={isReadOnly && editable}
+                          />
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </section>
@@ -361,14 +397,17 @@ export default function FunnelBoard({
           stages={stages}
           funnel={funnel}
           currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
           profilesById={profilesById}
           leadAppts={apptsByLead[selected.id] ?? []}
+          readOnly={isReadOnly && !canEditLead(selected)}
           onMove={(stage) => patchLead(selected.id, { stage })}
           onPriority={(p: Priority) => patchLead(selected.id, { priority: p })}
           onVoicemail={(value) => patchLead(selected.id, { voicemail_count: value })}
           onSaveAppt={(s, e, id) => saveAppt(selected.id, s, e, id)}
           onDeleteAppt={deleteAppt}
           onHandoff={() => setHandoffLead(selected)}
+          onTakeBack={() => takeBack(selected.id)}
           onClose={() => setSelectedId(null)}
         />
       )}

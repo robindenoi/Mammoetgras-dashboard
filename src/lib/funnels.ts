@@ -1,11 +1,10 @@
-// Vaste funnel-stages voor v1 (nog niet configureerbaar via de UI).
-
 export const AGENT_STAGES = [
   "Brochure verzonden",
   "Eerste opvolging",
   "Voicemail — bel terug",
   "Terugbelafspraak",
   "Klaar om door te zetten",
+  "Teruggenomen van closer",
 ] as const;
 
 export const CLOSING_STAGES = [
@@ -23,7 +22,6 @@ export function stagesFor(funnel: "agent" | "closing"): readonly string[] {
   return funnel === "agent" ? AGENT_STAGES : CLOSING_STAGES;
 }
 
-// Is dit de laatste stage van de agent-funnel? Dan volgt handoff i.p.v. verder.
 export function isFinalAgentStage(stage: string): boolean {
-  return stage === AGENT_STAGES[AGENT_STAGES.length - 1];
+  return stage === "Klaar om door te zetten";
 }

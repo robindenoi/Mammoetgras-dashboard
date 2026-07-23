@@ -62,6 +62,13 @@ export interface Profile {
   created_at: string;
 }
 
+export interface OwnerHistoryEntry {
+  action: "doorgezet" | "teruggenomen";
+  from: string | null;
+  to: string | null;
+  at: string;
+}
+
 export interface Lead {
   id: string;
   external_ref: string | null;
@@ -77,6 +84,7 @@ export interface Lead {
   priority: Priority;
   position: number;
   voicemail_count: number;
+  owner_history: OwnerHistoryEntry[];
   created_at: string;
   updated_at: string;
 }

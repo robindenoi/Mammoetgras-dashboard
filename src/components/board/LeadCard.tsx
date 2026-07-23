@@ -10,6 +10,7 @@ interface Props {
   ownerName?: string | null;
   draggable?: boolean;
   dragging?: boolean;
+  highlight?: boolean;
   onDragStart?: () => void;
   onDragEnd?: () => void;
   onOpen: () => void;
@@ -21,6 +22,7 @@ export default function LeadCard({
   ownerName,
   draggable,
   dragging,
+  highlight,
   onDragStart,
   onDragEnd,
   onOpen,
@@ -34,9 +36,9 @@ export default function LeadCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onOpen}
-      className={`flex w-full flex-col gap-1 rounded-xl bg-white p-4 text-left shadow-sm transition-all hover:shadow-md ${
-        draggable ? "cursor-grab active:cursor-grabbing" : ""
-      } ${dragging ? "opacity-40" : ""}`}
+      className={`flex w-full flex-col gap-1 rounded-xl p-4 text-left shadow-sm transition-all hover:shadow-md ${
+        highlight ? "bg-blue-50 ring-2 ring-blue-300" : "bg-white"
+      } ${draggable ? "cursor-grab active:cursor-grabbing" : ""} ${dragging ? "opacity-40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-semibold text-gray-800">
