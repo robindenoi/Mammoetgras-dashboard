@@ -26,6 +26,7 @@ export default function NewLeadForm({
   const [contactpersoon, setContactpersoon] = useState("");
   const [stad, setStad] = useState("");
   const [postcode, setPostcode] = useState("");
+  const [notitie, setNotitie] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +67,17 @@ export default function NewLeadForm({
       setBusy(false);
       return;
     }
-    onCreated(data as Lead);
+    const lead = data as Lead;
+
+    if (notitie.trim()) {
+      await supabase.from("lead_comments").insert({
+        lead_id: lead.id,
+        author_id: currentUserId,
+        body: notitie.trim(),
+      });
+    }
+
+    onCreated(lead);
   }
 
   const field =
@@ -171,6 +182,18 @@ export default function NewLeadForm({
                 className={field}
               />
             </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-500">
+              Notitie
+            </label>
+            <textarea
+              value={notitie}
+              onChange={(e) => setNotitie(e.target.value)}
+              placeholder="Eventuele opmerking bij deze lead..."
+              rows={3}
+              className={field}
+            />
           </div>
         </div>
 
