@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import type { Lead, Profile, Appointment, Role } from "@/lib/types";
 import FunnelBoard from "./FunnelBoard";
 import AgendaView from "@/components/calendar/AgendaView";
@@ -30,12 +30,15 @@ export default function BoardWorkspace({
   currentUserId,
   currentUserRole,
   personFilter,
-  handedOffLeadCloser,
+  handedOffLeadCloser: initialHandedOff,
 }: Props) {
   const [view, setView] = useState<View>("bord");
   const [boardPerson, setBoardPerson] = useState<string>("all");
   const [agendaPerson, setAgendaPerson] = useState<string>("all");
   const [appts, setAppts] = useState<Appointment[]>(initialAppointments);
+  const [handedOffMap, setHandedOffMap] = useState<Record<string, string>>(
+    initialHandedOff ?? {}
+  );
 
   const showPersonFilter = !!personFilter && personFilter.length > 0;
 
@@ -46,6 +49,10 @@ export default function BoardWorkspace({
   }, [initialLeads, boardPerson, showPersonFilter, funnel]);
 
   const agendaOwner = showPersonFilter ? agendaPerson : currentUserId;
+
+  const onHandoff = useCallback((leadId: string, closerId: string) => {
+    setHandedOffMap((prev) => ({ ...prev, [leadId]: closerId }));
+  }, []);
 
   return (
     <div>
@@ -118,6 +125,7 @@ export default function BoardWorkspace({
           profilesById={profilesById}
           currentUserId={currentUserId}
           currentUserRole={currentUserRole}
+          onHandoffDone={onHandoff}
         />
       ) : (
         <AgendaView
@@ -127,7 +135,7 @@ export default function BoardWorkspace({
           currentUserId={currentUserId}
           currentUserRole={currentUserRole}
           filterOwner={agendaOwner}
-          handedOffLeadCloser={handedOffLeadCloser}
+          handedOffLeadCloser={handedOffMap}
           profilesById={profilesById}
         />
       )}

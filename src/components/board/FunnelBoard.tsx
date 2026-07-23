@@ -20,6 +20,7 @@ interface Props {
   profilesById: Record<string, Profile>;
   currentUserId: string;
   currentUserRole: Role;
+  onHandoffDone?: (leadId: string, closerId: string) => void;
 }
 
 export default function FunnelBoard({
@@ -31,6 +32,7 @@ export default function FunnelBoard({
   profilesById,
   currentUserId,
   currentUserRole,
+  onHandoffDone,
 }: Props) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -232,6 +234,15 @@ export default function FunnelBoard({
       else setAppts((prev) => [...prev, data as Appointment]);
     }
 
+    const futureApptIds = appts
+      .filter((a) => a.lead_id === id && a.starts_at >= nowISO && a.owner_id !== closerId)
+      .map((a) => a.id);
+    if (futureApptIds.length > 0) {
+      await supabase
+        .from("appointments")
+        .update({ owner_id: closerId })
+        .in("id", futureApptIds);
+    }
     setAppts((prev) =>
       prev.map((a) =>
         a.lead_id === id && a.starts_at >= nowISO
@@ -242,6 +253,7 @@ export default function FunnelBoard({
     setLeads((ls) => ls.filter((l) => l.id !== id));
     setHandoffLead(null);
     setSelectedId(null);
+    onHandoffDone?.(id, closerId);
   }
 
   async function takeBack(leadId: string) {
