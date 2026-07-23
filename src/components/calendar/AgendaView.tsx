@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { format, addDays } from "date-fns";
 import { nl } from "date-fns/locale";
 import { TZDate } from "@date-fns/tz";
-import type { Appointment, Profile, Role } from "@/lib/types";
+import { createClient } from "@/lib/supabase/client";
+import type { Appointment, Profile, Role, Lead, Priority } from "@/lib/types";
 import {
   TZ,
   weekDays,
@@ -13,7 +14,9 @@ import {
   minutesIntoDay,
   durationMinutes,
 } from "@/lib/time";
+import { stagesFor } from "@/lib/funnels";
 import AppointmentForm from "./AppointmentForm";
+import LeadDrawer from "@/components/board/LeadDrawer";
 
 interface Props {
   appointments: Appointment[];
@@ -22,6 +25,7 @@ interface Props {
   currentUserId: string;
   currentUserRole: Role;
   filterOwner: string;
+  leadsById: Record<string, Lead>;
   handedOffLeadCloser?: Record<string, string>;
   profilesById?: Record<string, Profile>;
 }
@@ -109,6 +113,7 @@ export default function AgendaView({
   currentUserId,
   currentUserRole,
   filterOwner,
+  leadsById: initialLeadsById,
   handedOffLeadCloser,
   profilesById,
 }: Props) {
@@ -120,6 +125,14 @@ export default function AgendaView({
     minutesIntoDay(new Date().toISOString())
   );
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Lead drawer state
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [leadCache, setLeadCache] = useState<Record<string, Lead>>(initialLeadsById);
+
+  useEffect(() => {
+    setLeadCache((prev) => ({ ...prev, ...initialLeadsById }));
+  }, [initialLeadsById]);
 
   useEffect(() => {
     const i = setInterval(
@@ -138,7 +151,6 @@ export default function AgendaView({
       ? weekDays(ref)
       : [new TZDate(ref.getTime(), TZ)];
 
-  // Build closer color map from handedOffLeadCloser
   const closerColorMap = useMemo(() => {
     const map: Record<string, { bg: string; text: string; name: string }> = {};
     if (!handedOffLeadCloser) return map;
@@ -153,7 +165,6 @@ export default function AgendaView({
 
   const hasCloserAppts = Object.keys(closerColorMap).length > 0;
 
-  // Visible appointments: own + handed-off leads at closers
   const visible = useMemo(() => {
     const own = appointments.filter(
       (a) => filterOwner === "all" || a.owner_id === filterOwner
@@ -167,7 +178,6 @@ export default function AgendaView({
       return closerId && a.owner_id === closerId;
     });
 
-    // Dedupe
     const ownIds = new Set(own.map((a) => a.id));
     return [...own, ...closerAppts.filter((a) => !ownIds.has(a.id))];
   }, [appointments, filterOwner, showCloserAppts, handedOffLeadCloser]);
@@ -179,6 +189,92 @@ export default function AgendaView({
       return closerColorMap[closerId] || null;
     }
     return null;
+  }
+
+  async function openAppointment(appt: Appointment) {
+    if (appt.lead_id) {
+      const cached = leadCache[appt.lead_id];
+      if (cached) {
+        setSelectedLead(cached);
+        return;
+      }
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("leads")
+        .select("*")
+        .eq("id", appt.lead_id)
+        .single();
+      if (data) {
+        const lead = data as Lead;
+        setLeadCache((prev) => ({ ...prev, [lead.id]: lead }));
+        setSelectedLead(lead);
+      } else {
+        setForm({ mode: "edit", appt });
+      }
+    } else {
+      setForm({ mode: "edit", appt });
+    }
+  }
+
+  const leadAppts = useMemo(() => {
+    if (!selectedLead) return [];
+    return appointments.filter((a) => a.lead_id === selectedLead.id);
+  }, [selectedLead, appointments]);
+
+  const selectedLeadStages = selectedLead
+    ? stagesFor(selectedLead.funnel)
+    : [];
+
+  async function patchSelectedLead(changes: Partial<Lead>) {
+    if (!selectedLead) return;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("leads")
+      .update(changes)
+      .eq("id", selectedLead.id);
+    if (!error) {
+      const updated = { ...selectedLead, ...changes };
+      setSelectedLead(updated);
+      setLeadCache((prev) => ({ ...prev, [updated.id]: updated }));
+    }
+  }
+
+  async function saveLeadAppt(startsISO: string, endsISO: string, id?: string) {
+    if (!selectedLead) return;
+    const supabase = createClient();
+    if (id) {
+      const { data, error } = await supabase
+        .from("appointments")
+        .update({ starts_at: startsISO, ends_at: endsISO })
+        .eq("id", id)
+        .select()
+        .single();
+      if (!error && data)
+        setAppointments((prev) =>
+          prev.map((a) => (a.id === id ? (data as Appointment) : a))
+        );
+    } else {
+      const { data, error } = await supabase
+        .from("appointments")
+        .insert({
+          lead_id: selectedLead.id,
+          owner_id: currentUserId,
+          created_by: currentUserId,
+          type: "terugbel",
+          title: selectedLead.full_name ?? null,
+          starts_at: startsISO,
+          ends_at: endsISO,
+        })
+        .select()
+        .single();
+      if (!error && data) setAppointments((prev) => [...prev, data as Appointment]);
+    }
+  }
+
+  async function deleteLeadAppt(id: string) {
+    const supabase = createClient();
+    const { error } = await supabase.from("appointments").delete().eq("id", id);
+    if (!error) setAppointments((prev) => prev.filter((a) => a.id !== id));
   }
 
   const step = mode === "week" ? 7 : 1;
@@ -254,7 +350,6 @@ export default function AgendaView({
         </div>
       </div>
 
-      {/* Legenda closer-kleuren + toggle */}
       {hasCloserAppts && filterOwner !== "all" && (
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm">
@@ -279,7 +374,6 @@ export default function AgendaView({
       )}
 
       <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-        {/* Dag-koppen */}
         <div
           className="grid border-b border-gray-100"
           style={{ gridTemplateColumns: `3rem repeat(${days.length}, 1fr)` }}
@@ -298,13 +392,11 @@ export default function AgendaView({
           })}
         </div>
 
-        {/* Tijdrooster */}
         <div ref={scrollRef} className="max-h-[70vh] overflow-y-auto">
           <div
             className="grid"
             style={{ gridTemplateColumns: `3rem repeat(${days.length}, 1fr)` }}
           >
-            {/* Uur-labels */}
             <div className="relative" style={{ height: gridHeight }}>
               {HOURS.map((h, i) => (
                 <div
@@ -317,7 +409,6 @@ export default function AgendaView({
               ))}
             </div>
 
-            {/* Dag-kolommen */}
             {days.map((day) => {
               const today = sameAmsterdamDay(new Date().toISOString(), day);
               const dayAppts = visible.filter((a) =>
@@ -331,7 +422,6 @@ export default function AgendaView({
                   className="relative cursor-pointer border-l border-gray-100"
                   style={{ height: gridHeight }}
                 >
-                  {/* uurlijnen */}
                   {HOURS.map((h, i) => (
                     <div
                       key={h}
@@ -340,7 +430,6 @@ export default function AgendaView({
                     />
                   ))}
 
-                  {/* nu-lijn */}
                   {today &&
                     nowMin >= START_HOUR * 60 &&
                     nowMin <= END_HOUR * 60 && (
@@ -352,7 +441,6 @@ export default function AgendaView({
                       </div>
                     )}
 
-                  {/* afspraken */}
                   {layout.map(({ appt: a, col, totalCols }) => {
                     const startMin = minutesIntoDay(a.starts_at);
                     const dur = Math.max(20, durationMinutes(a.starts_at, a.ends_at));
@@ -367,7 +455,7 @@ export default function AgendaView({
                         key={a.id}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setForm({ mode: "edit", appt: a });
+                          openAppointment(a);
                         }}
                         className={`absolute z-20 overflow-hidden rounded-md px-1 py-0.5 text-left text-[11px] leading-tight shadow-sm ${
                           closerColor
@@ -419,6 +507,25 @@ export default function AgendaView({
             setForm(null);
           }}
           onClose={() => setForm(null)}
+        />
+      )}
+
+      {selectedLead && profilesById && (
+        <LeadDrawer
+          lead={selectedLead}
+          stages={selectedLeadStages}
+          funnel={selectedLead.funnel}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+          profilesById={profilesById}
+          leadAppts={leadAppts}
+          onMove={(stage) => patchSelectedLead({ stage })}
+          onPriority={(p: Priority) => patchSelectedLead({ priority: p })}
+          onVoicemail={(v) => patchSelectedLead({ voicemail_count: v })}
+          onSaveAppt={saveLeadAppt}
+          onDeleteAppt={deleteLeadAppt}
+          onHandoff={() => {}}
+          onClose={() => setSelectedLead(null)}
         />
       )}
     </div>

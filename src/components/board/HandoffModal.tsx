@@ -14,12 +14,14 @@ import {
   minutesIntoDay,
   durationMinutes,
   amsterdamLocalToISO,
+  isoToAmsterdamLocal,
 } from "@/lib/time";
 
 interface Props {
   lead: Lead;
   closers: Profile[];
   currentUserId: string;
+  existingAppt?: Appointment | null;
   onConfirm: (closerId: string, appt?: { starts_at: string; ends_at: string }) => Promise<void>;
   onClose: () => void;
 }
@@ -34,6 +36,7 @@ export default function HandoffModal({
   lead,
   closers,
   currentUserId,
+  existingAppt,
   onConfirm,
   onClose,
 }: Props) {
@@ -45,8 +48,17 @@ export default function HandoffModal({
   const [closerAppts, setCloserAppts] = useState<Appointment[]>([]);
   const [loadingAppts, setLoadingAppts] = useState(false);
   const [weekRef, setWeekRef] = useState<Date>(new Date());
-  const [apptStart, setApptStart] = useState("");
-  const [apptDuration, setApptDuration] = useState(30);
+  const [apptStart, setApptStart] = useState(() => {
+    if (!existingAppt) return "";
+    return isoToAmsterdamLocal(existingAppt.starts_at);
+  });
+  const [apptDuration, setApptDuration] = useState(() => {
+    if (!existingAppt) return 30;
+    const mins = Math.round(
+      (new Date(existingAppt.ends_at).getTime() - new Date(existingAppt.starts_at).getTime()) / 60000
+    );
+    return DURATIONS.includes(mins) ? mins : 30;
+  });
 
   const active = closers.filter((c) => c.active);
   const chosenProfile = active.find((c) => c.id === chosen);

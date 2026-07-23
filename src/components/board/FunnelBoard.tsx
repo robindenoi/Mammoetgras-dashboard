@@ -8,6 +8,7 @@ import { stagesFor, CLOSING_STAGES, AGENT_STAGES } from "@/lib/funnels";
 import LeadCard from "./LeadCard";
 import LeadDrawer from "./LeadDrawer";
 import HandoffModal from "./HandoffModal";
+import NewLeadForm from "./NewLeadForm";
 
 type SortKey = "handmatig" | "prioriteit" | "nieuw" | "oud" | "afspraak";
 
@@ -42,6 +43,7 @@ export default function FunnelBoard({
   const [sort, setSort] = useState<SortKey>("handmatig");
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<string | null>(null);
+  const [showNewLead, setShowNewLead] = useState(false);
 
   const stages = stagesFor(funnel);
   const selected = leads.find((l) => l.id === selectedId) ?? null;
@@ -301,6 +303,14 @@ export default function FunnelBoard({
           />
         </div>
         <div className="flex items-center gap-2">
+          {!isReadOnly && (
+            <button
+              onClick={() => setShowNewLead(true)}
+              className="rounded-xl bg-mg-green px-4 py-2.5 text-sm font-semibold text-white hover:bg-mg-accent"
+            >
+              + Nieuwe lead
+            </button>
+          )}
           <label className="text-sm text-gray-500">Sorteer:</label>
           <select
             value={sort}
@@ -424,11 +434,24 @@ export default function FunnelBoard({
         />
       )}
 
+      {showNewLead && (
+        <NewLeadForm
+          funnel={funnel}
+          currentUserId={currentUserId}
+          onCreated={(lead) => {
+            setLeads((prev) => [lead, ...prev]);
+            setShowNewLead(false);
+          }}
+          onClose={() => setShowNewLead(false)}
+        />
+      )}
+
       {handoffLead && (
         <HandoffModal
           lead={handoffLead}
           closers={closers}
           currentUserId={currentUserId}
+          existingAppt={nextApptByLead[handoffLead.id] ?? null}
           onConfirm={handoff}
           onClose={() => setHandoffLead(null)}
         />

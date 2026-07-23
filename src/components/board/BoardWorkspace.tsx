@@ -50,6 +50,12 @@ export default function BoardWorkspace({
 
   const agendaOwner = showPersonFilter ? agendaPerson : currentUserId;
 
+  const leadsById = useMemo(() => {
+    const map: Record<string, Lead> = {};
+    for (const l of initialLeads) map[l.id] = l;
+    return map;
+  }, [initialLeads]);
+
   const onHandoff = useCallback((leadId: string, closerId: string) => {
     setHandedOffMap((prev) => ({ ...prev, [leadId]: closerId }));
   }, []);
@@ -135,6 +141,7 @@ export default function BoardWorkspace({
           currentUserId={currentUserId}
           currentUserRole={currentUserRole}
           filterOwner={agendaOwner}
+          leadsById={leadsById}
           handedOffLeadCloser={handedOffMap}
           profilesById={profilesById}
         />
