@@ -57,10 +57,14 @@ export default function AppointmentForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isOwn = !appointment || appointment.owner_id === currentUserId;
+  const isPrivileged = currentUserRole === "closer" || currentUserRole === "admin";
+  const canEdit = isOwn || isPrivileged;
+
   const canTakeOver =
     appointment &&
     appointment.owner_id !== currentUserId &&
-    (currentUserRole === "closer" || currentUserRole === "admin");
+    isPrivileged;
 
   async function takeOver() {
     if (!appointment) return;
@@ -159,7 +163,11 @@ export default function AppointmentForm({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
       <div className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-xl sm:rounded-3xl">
         <h2 className="mb-1 text-lg font-bold text-mg-dark">
-          {appointment ? "Afspraak bewerken" : "Nieuwe afspraak"}
+          {!canEdit
+            ? "Afspraak bekijken"
+            : appointment
+              ? "Afspraak bewerken"
+              : "Nieuwe afspraak"}
         </h2>
         {appointment?.created_by &&
           appointment.created_by !== appointment.owner_id && (
@@ -208,6 +216,7 @@ export default function AppointmentForm({
             <select
               value={ownerId}
               onChange={(e) => setOwnerId(e.target.value)}
+              disabled={!canEdit}
               className={field}
             >
               {people.map((p) => (
@@ -226,6 +235,7 @@ export default function AppointmentForm({
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as AppointmentType)}
+                disabled={!canEdit}
                 className={field}
               >
                 <option value="terugbel">Terugbelafspraak</option>
@@ -239,6 +249,7 @@ export default function AppointmentForm({
               <select
                 value={duration}
                 onChange={(e) => setDuration(Number(e.target.value))}
+                disabled={!canEdit}
                 className={field}
               >
                 {DURATIONS.map((d) => (
@@ -261,6 +272,7 @@ export default function AppointmentForm({
                 setStart(e.target.value);
                 setConflicts(null);
               }}
+              disabled={!canEdit}
               className={field}
             />
           </div>
@@ -273,6 +285,7 @@ export default function AppointmentForm({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="bijv. naam van de klant"
+              disabled={!canEdit}
               className={field}
             />
           </div>
@@ -283,9 +296,9 @@ export default function AppointmentForm({
             onClick={onClose}
             className="flex-1 rounded-xl bg-gray-100 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-200"
           >
-            Annuleren
+            {canEdit ? "Annuleren" : "Sluiten"}
           </button>
-          {appointment && (
+          {canEdit && appointment && (
             <button
               onClick={remove}
               disabled={busy}
@@ -294,17 +307,19 @@ export default function AppointmentForm({
               Verwijderen
             </button>
           )}
-          <button
-            onClick={() => save(conflicts !== null)}
-            disabled={busy}
-            className="flex-1 rounded-xl bg-mg-green py-3 text-sm font-bold text-white hover:bg-mg-accent disabled:opacity-50"
-          >
-            {busy
-              ? "Bezig..."
-              : conflicts !== null
-                ? "Toch opslaan"
-                : "Opslaan"}
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => save(conflicts !== null)}
+              disabled={busy}
+              className="flex-1 rounded-xl bg-mg-green py-3 text-sm font-bold text-white hover:bg-mg-accent disabled:opacity-50"
+            >
+              {busy
+                ? "Bezig..."
+                : conflicts !== null
+                  ? "Toch opslaan"
+                  : "Opslaan"}
+            </button>
+          )}
         </div>
       </div>
     </div>
