@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead, Profile, Appointment, Priority, Role } from "@/lib/types";
 import { PRIORITY_RANK, PRIORITIES, PRIORITY_LABELS } from "@/lib/types";
@@ -54,6 +54,45 @@ export default function FunnelBoard({
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<string | null>(null);
   const [showNewLead, setShowNewLead] = useState(false);
+
+  // Auto-scroll van het horizontale bord terwijl je een kaart naar de rand sleept.
+  const boardRef = useRef<HTMLDivElement>(null);
+  const scrollDir = useRef(0);
+  const rafRef = useRef<number | null>(null);
+
+  function stopAutoScroll() {
+    scrollDir.current = 0;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }
+
+  function autoScrollTick() {
+    const el = boardRef.current;
+    if (el && scrollDir.current !== 0) {
+      el.scrollLeft += scrollDir.current * 16;
+      rafRef.current = requestAnimationFrame(autoScrollTick);
+    } else {
+      rafRef.current = null;
+    }
+  }
+
+  function onBoardDragOver(e: React.DragEvent<HTMLDivElement>) {
+    const el = boardRef.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    const rect = el.getBoundingClientRect();
+    const EDGE = 90;
+    let dir = 0;
+    if (e.clientX < rect.left + EDGE) dir = -1;
+    else if (e.clientX > rect.right - EDGE) dir = 1;
+    scrollDir.current = dir;
+    if (dir !== 0 && rafRef.current == null) {
+      rafRef.current = requestAnimationFrame(autoScrollTick);
+    }
+  }
+
+  useEffect(() => stopAutoScroll, []);
 
   const stages = stagesFor(funnel);
   const selected = leads.find((l) => l.id === selectedId) ?? null;
@@ -202,6 +241,7 @@ export default function FunnelBoard({
     const posById = new Map<string, number>();
     targetList.forEach((l, i) => posById.set(l.id, i));
 
+    const prev = leads;
     setLeads((ls) =>
       ls.map((l) => {
         if (l.id === draggedId)
@@ -212,17 +252,37 @@ export default function FunnelBoard({
     );
 
     const supabase = createClient();
+
+    // 1) De stage van de gesleepte kaart is het belangrijkst: die moet blijven
+    //    staan waar hij naartoe is gesleept. Aparte, gegarandeerde update.
+    const draggedPos = posById.get(draggedId)!;
+    let { error: err } = await supabase
+      .from("leads")
+      .update({ stage: targetStage, position: draggedPos })
+      .eq("id", draggedId);
+    if (err) {
+      // Val terug op enkel de stage (bv. als 'position' live nog ontbreekt).
+      ({ error: err } = await supabase
+        .from("leads")
+        .update({ stage: targetStage })
+        .eq("id", draggedId));
+    }
+    if (err) {
+      setError(err.message);
+      setLeads(prev);
+      return;
+    }
+
+    // 2) Volgorde van de overige kaarten — best effort, faalt stil.
     await Promise.all(
-      targetList.map((l) =>
-        supabase
-          .from("leads")
-          .update(
-            l.id === draggedId
-              ? { stage: targetStage, position: posById.get(l.id)! }
-              : { position: posById.get(l.id)! }
-          )
-          .eq("id", l.id)
-      )
+      targetList
+        .filter((l) => l.id !== draggedId)
+        .map((l) =>
+          supabase
+            .from("leads")
+            .update({ position: posById.get(l.id)! })
+            .eq("id", l.id)
+        )
     );
   }
 
@@ -413,7 +473,11 @@ export default function FunnelBoard({
           Nog geen leads in deze funnel.
         </p>
       ) : (
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-4 lg:overflow-x-auto lg:pb-4">
+        <div
+          ref={boardRef}
+          onDragOver={onBoardDragOver}
+          className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-4 lg:overflow-x-auto lg:pb-4"
+        >
           {stages.map((stage) => {
             const items = visibleByStage(stage);
             const isOver = overStage === stage;
@@ -435,8 +499,9 @@ export default function FunnelBoard({
                   if (!isReadOnly && dragId) reorder(dragId, stage, null);
                   setDragId(null);
                   setOverStage(null);
+                  stopAutoScroll();
                 }}
-                className={`rounded-2xl p-2 transition-colors lg:w-72 lg:shrink-0 ${
+                className={`flex flex-col rounded-2xl p-2 transition-colors lg:w-72 lg:shrink-0 ${
                   isOver && !isReadOnly ? "bg-mg-green/10 ring-2 ring-mg-green/40" : "bg-black/[0.02]"
                 }`}
               >
@@ -446,7 +511,7 @@ export default function FunnelBoard({
                     {items.length}
                   </span>
                 </div>
-                <div className="min-h-[3rem] space-y-2">
+                <div className="min-h-[4rem] flex-1 space-y-2">
                   {items.length === 0 ? (
                     <p className="px-2 py-6 text-center text-xs text-gray-400">
                       {isReadOnly ? "Geen kaarten" : "Sleep hierheen"}
@@ -464,6 +529,7 @@ export default function FunnelBoard({
                             if (!isReadOnly && dragId) reorder(dragId, lead.stage, lead.id);
                             setDragId(null);
                             setOverStage(null);
+                            stopAutoScroll();
                           }}
                         >
                           <LeadCard
@@ -481,6 +547,7 @@ export default function FunnelBoard({
                             onDragEnd={() => {
                               setDragId(null);
                               setOverStage(null);
+                              stopAutoScroll();
                             }}
                             onOpen={() => setSelectedId(lead.id)}
                             highlight={isReadOnly && editable}

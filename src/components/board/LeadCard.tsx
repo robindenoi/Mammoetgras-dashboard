@@ -78,7 +78,7 @@ export default function LeadCard({
           highlight ? "bg-blue-50 ring-2 ring-blue-300" : "bg-white"
         } ${isToday ? "hf-shake ring-2 ring-amber-400" : ""} ${
           draggable ? "cursor-grab active:cursor-grabbing" : ""
-        } ${dragging ? "opacity-40" : ""}`}
+        } ${dragging ? "scale-[0.98] opacity-40 ring-2 ring-mg-green/50" : ""}`}
       >
         <div className="flex items-start justify-between gap-2">
           <span className="font-semibold text-gray-800">
