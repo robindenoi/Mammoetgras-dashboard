@@ -13,7 +13,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: "/", label: "Bezwaarkaarten", roles: ["agent", "closer", "admin"] },
-  { href: "/leads", label: "Mijn leads", roles: ["agent", "admin"] },
+  { href: "/leads", label: "Leads", roles: ["agent", "closer", "admin"] },
   { href: "/closing", label: "Closing", roles: ["agent", "closer", "admin"] },
   { href: "/import", label: "Import", roles: ["admin"] },
   { href: "/beheer", label: "Beheer", roles: ["admin"] },

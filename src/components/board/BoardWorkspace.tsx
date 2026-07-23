@@ -41,8 +41,9 @@ export default function BoardWorkspace({
 
   const filteredLeads = useMemo(() => {
     if (!showPersonFilter || boardPerson === "all") return initialLeads;
-    return initialLeads.filter((l) => l.closer_id === boardPerson);
-  }, [initialLeads, boardPerson, showPersonFilter]);
+    const key = funnel === "agent" ? "agent_id" : "closer_id";
+    return initialLeads.filter((l) => l[key] === boardPerson);
+  }, [initialLeads, boardPerson, showPersonFilter, funnel]);
 
   const agendaOwner = showPersonFilter ? agendaPerson : currentUserId;
 
@@ -79,7 +80,9 @@ export default function BoardWorkspace({
                 onChange={(e) => setBoardPerson(e.target.value)}
                 className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
               >
-                <option value="all">Alle closers</option>
+                <option value="all">
+                  {funnel === "agent" ? "Alle agents" : "Alle closers"}
+                </option>
                 {personFilter!.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.full_name || p.id}
