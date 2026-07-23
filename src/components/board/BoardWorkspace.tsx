@@ -108,8 +108,10 @@ export default function BoardWorkspace({
                 onChange={(e) => setAgendaPerson(e.target.value)}
                 className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium focus:border-mg-green focus:outline-none focus:ring-2 focus:ring-mg-green/20"
               >
-                <option value="all">Iedereen</option>
-                {people.map((p) => (
+                <option value="all">
+                  {funnel === "agent" ? "Alle agents" : "Alle closers"}
+                </option>
+                {personFilter!.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.full_name || p.id}
                   </option>
