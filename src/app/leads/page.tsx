@@ -41,7 +41,7 @@ export default async function LeadsPage() {
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
       <h1 className="mb-1 text-2xl font-bold text-mg-dark sm:text-3xl">
-        {isViewer ? "Leads (agents)" : "Mijn leads"}
+        {isViewer ? "Sales Agents Board" : "Mijn Board"}
       </h1>
       <p className="mb-6 text-gray-500">
         {isViewer
