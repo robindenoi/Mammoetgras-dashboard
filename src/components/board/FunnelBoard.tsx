@@ -476,6 +476,18 @@ export default function FunnelBoard({
         <div
           ref={boardRef}
           onDragOver={onBoardDragOver}
+          onDrop={() => {
+            // Loslaten in de ruimte tussen kolommen: geen verplaatsing, maar
+            // wél alles netjes resetten (voorkomt vastlopen).
+            setDragId(null);
+            setOverStage(null);
+            stopAutoScroll();
+          }}
+          onDragEnd={() => {
+            setDragId(null);
+            setOverStage(null);
+            stopAutoScroll();
+          }}
           className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-4 lg:overflow-x-auto lg:pb-4"
         >
           {stages.map((stage) => {
