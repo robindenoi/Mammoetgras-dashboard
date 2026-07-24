@@ -122,16 +122,18 @@ export default function FunnelBoard({
   // als die er niet (meer) is, de laatst geweeste — zodat een afspraak op de
   // kaart blijft staan, ook als het moment nu is of net voorbij.
   const displayApptByLead = useMemo(() => {
+    const nowMs = Date.parse(nowISO);
     const upcoming: Record<string, Appointment> = {};
     const past: Record<string, Appointment> = {};
     for (const a of appts) {
       if (!a.lead_id) continue;
-      if (a.starts_at >= nowISO) {
+      const t = Date.parse(a.starts_at);
+      if (t >= nowMs) {
         const c = upcoming[a.lead_id];
-        if (!c || a.starts_at < c.starts_at) upcoming[a.lead_id] = a;
+        if (!c || t < Date.parse(c.starts_at)) upcoming[a.lead_id] = a;
       } else {
         const c = past[a.lead_id];
-        if (!c || a.starts_at > c.starts_at) past[a.lead_id] = a;
+        if (!c || t > Date.parse(c.starts_at)) past[a.lead_id] = a;
       }
     }
     const m: Record<string, Appointment> = {};

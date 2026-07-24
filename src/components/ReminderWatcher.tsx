@@ -78,6 +78,29 @@ export default function ReminderWatcher() {
     return () => clearInterval(i);
   }, [fetchAppts]);
 
+  // Real-time: pik nieuwe/gewijzigde afspraken direct op via Supabase Realtime,
+  // zodat de reminder-timer meteen herberekend wordt (geen wachten op de poll).
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`reminders-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "appointments",
+          filter: `owner_id=eq.${user.id}`,
+        },
+        () => fetchAppts()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchAppts]);
+
   const check = useCallback(() => {
     if (!user) return;
     const now = Date.now();
