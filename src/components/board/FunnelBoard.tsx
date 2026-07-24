@@ -106,12 +106,37 @@ export default function FunnelBoard({
     return lead.agent_id === currentUserId;
   }
 
+  // Eerstvolgende toekomstige afspraak — gebruikt voor doorzetten (pre-fill) en
+  // de sorteeroptie "eerstvolgende afspraak".
   const nextApptByLead = useMemo(() => {
     const m: Record<string, Appointment> = {};
     for (const a of appts) {
       if (!a.lead_id || a.starts_at < nowISO) continue;
       const cur = m[a.lead_id];
       if (!cur || a.starts_at < cur.starts_at) m[a.lead_id] = a;
+    }
+    return m;
+  }, [appts, nowISO]);
+
+  // Afspraak die op de kaart getoond wordt: bij voorkeur de eerstvolgende, maar
+  // als die er niet (meer) is, de laatst geweeste — zodat een afspraak op de
+  // kaart blijft staan, ook als het moment nu is of net voorbij.
+  const displayApptByLead = useMemo(() => {
+    const upcoming: Record<string, Appointment> = {};
+    const past: Record<string, Appointment> = {};
+    for (const a of appts) {
+      if (!a.lead_id) continue;
+      if (a.starts_at >= nowISO) {
+        const c = upcoming[a.lead_id];
+        if (!c || a.starts_at < c.starts_at) upcoming[a.lead_id] = a;
+      } else {
+        const c = past[a.lead_id];
+        if (!c || a.starts_at > c.starts_at) past[a.lead_id] = a;
+      }
+    }
+    const m: Record<string, Appointment> = {};
+    for (const id of new Set([...Object.keys(upcoming), ...Object.keys(past)])) {
+      m[id] = upcoming[id] ?? past[id];
     }
     return m;
   }, [appts, nowISO]);
@@ -546,7 +571,7 @@ export default function FunnelBoard({
                         >
                           <LeadCard
                             lead={lead}
-                            nextAppt={nextApptByLead[lead.id] ?? null}
+                            nextAppt={displayApptByLead[lead.id] ?? null}
                             ownerName={
                               lead.agent_id
                                 ? profilesById[lead.agent_id]?.full_name

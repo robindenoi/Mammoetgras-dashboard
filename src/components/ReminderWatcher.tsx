@@ -74,7 +74,7 @@ export default function ReminderWatcher() {
 
   useEffect(() => {
     fetchAppts();
-    const i = setInterval(fetchAppts, 5 * 60 * 1000);
+    const i = setInterval(fetchAppts, 60 * 1000);
     return () => clearInterval(i);
   }, [fetchAppts]);
 
@@ -113,11 +113,28 @@ export default function ReminderWatcher() {
     }
   }, [appts, user, remindBefore]);
 
+  // Plan een exacte timer op het eerstvolgende reminder-moment, i.p.v. te pollen.
+  // Zo komt de melding precies op tijd binnen (in een actief tabblad).
   useEffect(() => {
     check();
-    const i = setInterval(check, 20 * 1000);
-    return () => clearInterval(i);
-  }, [check]);
+    const now = Date.now();
+    const threshold = remindBefore * 60 * 1000;
+    let soonest = Infinity;
+    for (const a of appts) {
+      if (dismissed.current.has(a.id)) continue;
+      const due = new Date(a.starts_at).getTime() - threshold;
+      const snoozeUntil = snoozed.current.get(a.id);
+      const effectiveDue = snoozeUntil ? Math.max(due, snoozeUntil) : due;
+      if (effectiveDue > now && effectiveDue < soonest) soonest = effectiveDue;
+    }
+    // Cap op 5 min zodat we periodiek herevalueren (klok/tab-wijzigingen).
+    const delay =
+      soonest === Infinity
+        ? 60 * 1000
+        : Math.min(soonest - now, 5 * 60 * 1000) + 100;
+    const t = setTimeout(check, delay);
+    return () => clearTimeout(t);
+  }, [check, appts, remindBefore, dueId]);
 
   // Meteen opnieuw controleren zodra het tabblad weer actief wordt. Browsers
   // vertragen timers in achtergrond-tabs, waardoor reminders anders te laat komen.
