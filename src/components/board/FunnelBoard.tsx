@@ -320,10 +320,11 @@ export default function FunnelBoard({
         .from("appointments")
         .update({ starts_at: startsISO, ends_at: endsISO })
         .eq("id", id)
-        .select()
-        .single();
-      if (err) return setError(err.message);
-      setAppts((prev) => prev.map((a) => (a.id === id ? (data as Appointment) : a)));
+        .select();
+      if (err) throw new Error(err.message);
+      if (!data || data.length === 0)
+        throw new Error("Geen rechten om deze afspraak te wijzigen.");
+      setAppts((prev) => prev.map((a) => (a.id === id ? (data[0] as Appointment) : a)));
     } else {
       const lead = leads.find((l) => l.id === leadId);
       const { data, error: err } = await supabase
@@ -339,15 +340,21 @@ export default function FunnelBoard({
         })
         .select()
         .single();
-      if (err) return setError(err.message);
+      if (err) throw new Error(err.message);
       setAppts((prev) => [...prev, data as Appointment]);
     }
   }
 
   async function deleteAppt(id: string) {
     const supabase = createClient();
-    const { error: err } = await supabase.from("appointments").delete().eq("id", id);
-    if (err) return setError(err.message);
+    const { data, error: err } = await supabase
+      .from("appointments")
+      .delete()
+      .eq("id", id)
+      .select();
+    if (err) throw new Error(err.message);
+    if (!data || data.length === 0)
+      throw new Error("Geen rechten om deze afspraak te verwijderen.");
     setAppts((prev) => prev.filter((a) => a.id !== id));
   }
 

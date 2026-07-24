@@ -89,6 +89,7 @@ export default function LeadDrawer({
   const [apptDuration, setApptDuration] = useState(30);
   const [editingApptId, setEditingApptId] = useState<string | null>(null);
   const [savingAppt, setSavingAppt] = useState(false);
+  const [apptError, setApptError] = useState<string | null>(null);
   const [waStatus, setWaStatus] = useState<
     Record<string, "sending" | "sent" | "error">
   >({});
@@ -125,15 +126,30 @@ export default function LeadDrawer({
     if (readOnly) return;
     if (!apptStart.includes("T") || apptStart.startsWith("T")) return;
     setSavingAppt(true);
+    setApptError(null);
     const startsISO = amsterdamLocalToISO(apptStart);
     const endsISO = new Date(
       new Date(startsISO).getTime() + apptDuration * 60000
     ).toISOString();
-    await onSaveAppt(startsISO, endsISO, editingApptId ?? undefined);
-    setApptStart("");
-    setApptDuration(30);
-    setEditingApptId(null);
-    setSavingAppt(false);
+    try {
+      await onSaveAppt(startsISO, endsISO, editingApptId ?? undefined);
+      setApptStart("");
+      setApptDuration(30);
+      setEditingApptId(null);
+    } catch (e) {
+      setApptError(e instanceof Error ? e.message : "Opslaan mislukt.");
+    } finally {
+      setSavingAppt(false);
+    }
+  }
+
+  async function deleteApptSafe(id: string) {
+    setApptError(null);
+    try {
+      await onDeleteAppt(id);
+    } catch (e) {
+      setApptError(e instanceof Error ? e.message : "Verwijderen mislukt.");
+    }
   }
 
   useEffect(() => {
@@ -297,6 +313,11 @@ export default function LeadDrawer({
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
               Afspraak inplannen
             </label>
+            {apptError && (
+              <div className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                {apptError}
+              </div>
+            )}
             {leadAppts.length > 0 && (
               <ul className="mb-3 space-y-2">
                 {leadAppts
@@ -326,7 +347,7 @@ export default function LeadDrawer({
                               bewerk
                             </button>
                             <button
-                              onClick={() => onDeleteAppt(a.id)}
+                              onClick={() => deleteApptSafe(a.id)}
                               className="text-xs font-medium text-red-500 hover:underline"
                             >
                               verwijder

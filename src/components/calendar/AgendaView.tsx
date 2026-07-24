@@ -247,12 +247,13 @@ export default function AgendaView({
         .from("appointments")
         .update({ starts_at: startsISO, ends_at: endsISO })
         .eq("id", id)
-        .select()
-        .single();
-      if (!error && data)
-        setAppointments((prev) =>
-          prev.map((a) => (a.id === id ? (data as Appointment) : a))
-        );
+        .select();
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0)
+        throw new Error("Geen rechten om deze afspraak te wijzigen.");
+      setAppointments((prev) =>
+        prev.map((a) => (a.id === id ? (data[0] as Appointment) : a))
+      );
     } else {
       const { data, error } = await supabase
         .from("appointments")
@@ -273,8 +274,15 @@ export default function AgendaView({
 
   async function deleteLeadAppt(id: string) {
     const supabase = createClient();
-    const { error } = await supabase.from("appointments").delete().eq("id", id);
-    if (!error) setAppointments((prev) => prev.filter((a) => a.id !== id));
+    const { data, error } = await supabase
+      .from("appointments")
+      .delete()
+      .eq("id", id)
+      .select();
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0)
+      throw new Error("Geen rechten om deze afspraak te verwijderen.");
+    setAppointments((prev) => prev.filter((a) => a.id !== id));
   }
 
   const step = mode === "week" ? 7 : 1;
