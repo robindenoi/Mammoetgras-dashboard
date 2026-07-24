@@ -39,9 +39,17 @@ export default function ReminderWatcher() {
   const [remindBefore, setRemindBefore] = useState(loadRemindBefore);
   const dismissed = useRef<Set<string>>(new Set());
   const snoozed = useRef<Map<string, number>>(new Map());
+  const notified = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     dismissed.current = new Set(loadDismissed());
+  }, []);
+
+  // Vraag (best effort) toestemming voor desktop-meldingen.
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
   }, []);
 
   function updateRemindBefore(min: number) {
@@ -70,25 +78,62 @@ export default function ReminderWatcher() {
     return () => clearInterval(i);
   }, [fetchAppts]);
 
-  useEffect(() => {
+  const check = useCallback(() => {
     if (!user) return;
-    function check() {
-      const now = Date.now();
-      const threshold = remindBefore * 60 * 1000;
-      for (const a of appts) {
-        if (dismissed.current.has(a.id)) continue;
-        const snoozeUntil = snoozed.current.get(a.id);
-        if (snoozeUntil && now < snoozeUntil) continue;
-        if (new Date(a.starts_at).getTime() - threshold <= now) {
-          setDueId(a.id);
-          return;
+    const now = Date.now();
+    const threshold = remindBefore * 60 * 1000;
+    for (const a of appts) {
+      if (dismissed.current.has(a.id)) continue;
+      const snoozeUntil = snoozed.current.get(a.id);
+      if (snoozeUntil && now < snoozeUntil) continue;
+      if (new Date(a.starts_at).getTime() - threshold <= now) {
+        setDueId(a.id);
+        // Desktop-melding als het tabblad op de achtergrond staat, zodat een
+        // reminder niet gemist wordt terwijl de browser de timers afknijpt.
+        if (
+          typeof Notification !== "undefined" &&
+          Notification.permission === "granted" &&
+          typeof document !== "undefined" &&
+          document.hidden &&
+          !notified.current.has(a.id)
+        ) {
+          notified.current.add(a.id);
+          const naam = a.lead?.full_name || a.title || "Lead";
+          try {
+            new Notification(
+              a.type === "closing" ? "Closing-afspraak" : "Tijd om te bellen",
+              { body: `${naam} — ${formatDateTime(a.starts_at)}`, tag: a.id }
+            );
+          } catch {
+            // meldingen niet beschikbaar — negeren
+          }
         }
+        return;
       }
     }
-    check();
-    const i = setInterval(check, 30 * 1000);
-    return () => clearInterval(i);
   }, [appts, user, remindBefore]);
+
+  useEffect(() => {
+    check();
+    const i = setInterval(check, 20 * 1000);
+    return () => clearInterval(i);
+  }, [check]);
+
+  // Meteen opnieuw controleren zodra het tabblad weer actief wordt. Browsers
+  // vertragen timers in achtergrond-tabs, waardoor reminders anders te laat komen.
+  useEffect(() => {
+    if (!user) return;
+    const onActive = () => {
+      fetchAppts();
+      check();
+    };
+    document.addEventListener("visibilitychange", onActive);
+    window.addEventListener("focus", onActive);
+    return () => {
+      document.removeEventListener("visibilitychange", onActive);
+      window.removeEventListener("focus", onActive);
+    };
+  }, [user, fetchAppts, check]);
 
   if (!user) return null;
 
